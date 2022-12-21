@@ -13,6 +13,8 @@
 /// \author 
 /// \since
 
+#include <iostream>
+
 #include "Framework/runDataProcessing.h"
 #include "Framework/AnalysisTask.h"
 #include "Framework/AnalysisDataModel.h"
@@ -22,12 +24,28 @@
 #include "Common/DataModel/PIDResponse.h"
 #include "Common/DataModel/Multiplicity.h"
 
+using namespace std;
 using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
 
-using MyTracksRun3 = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::TracksDCA, aod::pidTPCFullPi, aod::pidTPCFullPr, aod::pidTPCFullKa, aod::pidTPCFullDe, aod::pidTPCFullTr, aod::pidTPCFullHe>;
-using MyTracksRun2 = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksCov, aod::TracksDCA, aod::pidTPCFullPi, aod::pidTPCFullPr, aod::pidTPCFullKa, aod::pidTPCFullDe, aod::pidTPCFullTr, aod::pidTPCFullHe>;
+using MyTracksRun3 = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TrackSelection, aod::TracksDCA, aod::pidTPCFullPi, aod::pidTPCFullPr, aod::pidTPCFullKa, aod::pidTPCFullDe, aod::pidTPCFullTr, aod::pidTPCFullHe>;
+using MyTracksRun2 = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksDCA, aod::pidTPCFullPi, aod::pidTPCFullPr, aod::pidTPCFullKa, aod::pidTPCFullDe, aod::pidTPCFullTr, aod::pidTPCFullHe>;
+
+void GetChargeRatio(HistogramRegistry reg, std::shared_ptr<TH1> histo1, std::shared_ptr<TH1> histo2, std::shared_ptr<TH1> histo3, std::shared_ptr<TH1> histo4) {
+  const char *label[4] = {"all tracks", "protons", "nuclei", "triton"};
+  const Double_t ChargeRatio1 = histo1->GetBinContent(1)/histo1->GetBinContent(2);
+  const Double_t ChargeRatio2 = histo2->GetBinContent(1)/histo2->GetBinContent(2);
+  const Double_t ChargeRatio3 = histo3->GetBinContent(1)/histo3->GetBinContent(2);
+  const Double_t ChargeRatio4 = histo4->GetBinContent(1)/histo4->GetBinContent(2);
+  for (Int_t i=0; i<4; i++) {
+    reg.get<TH1>(HIST("Tracks/hChargeRatio"))->GetXaxis()->SetBinLabel(i+1, label[i]);
+  }
+  reg.get<TH1>(HIST("Tracks/hChargeRatio"))->SetBinContent(1, ChargeRatio1);
+  reg.get<TH1>(HIST("Tracks/hChargeRatio"))->SetBinContent(2, ChargeRatio2);
+  reg.get<TH1>(HIST("Tracks/hChargeRatio"))->SetBinContent(3, ChargeRatio3);
+  reg.get<TH1>(HIST("Tracks/hChargeRatio"))->SetBinContent(4, ChargeRatio4);
+}
 
 struct trackchecks {
   /// histogram configurables
@@ -40,7 +58,7 @@ struct trackchecks {
   /// track configurables
   Configurable<float> eta{"eta", 0.8, "eta"}; // expression table
   Configurable<float> tpcNClsFound{"tpcNClsFound", 70, "Number of TPC clusters"}; // dynamic
-  Configurable<float> tpcCrossedRowsOverFindableCls{"tpcCrossedRowsOverFindableCls", 80, "Ratio crossed rows over findable"}; // dynamic
+  Configurable<float> tpcCrossedRowsOverFindableCls{"tpcCrossedRowsOverFindableCls", 0.8, "Ratio crossed rows over findable"}; // dynamic
 
   /// Filters (Cannot filter on dynamic columns -> only filter on rapidity (expression column))
   Filter rapFilter = nabs(aod::track::eta) < eta;
@@ -107,29 +125,27 @@ struct trackchecks {
 
   void processEvents(soa::Join<aod::Collisions, aod::Mults, aod::EvSels>::iterator const& collision) {
     /// basic event selection
-    if (!collision.sel7() || TMath::Abs(collision.posZ()) >= 10.) {
-        return;
-    }
+    if (!collision.sel8() || TMath::Abs(collision.posZ()) >= 10.) return;
     /// fill event histograms
+    registry.get<TH1>(HIST("Events/hVertexNcontrib"))->Fill(collision.multNTracksPV());
+    if (collision.multNTracksPV() <= 1) return;
     registry.get<TH1>(HIST("Events/hVertexX"))->Fill(collision.posX());
     registry.get<TH1>(HIST("Events/hVertexY"))->Fill(collision.posY());
     registry.get<TH1>(HIST("Events/hVertexZ"))->Fill(collision.posZ());
     registry.get<TH2>(HIST("Events/hVertexXY"))->Fill(collision.posX(), collision.posY());
-    registry.get<TH1>(HIST("Events/hVertexNcontrib"))->Fill(collision.multNTracksPV());
   }
+  PROCESS_SWITCH(trackchecks, processEvents, "Process events, plot event properties", true);
 
-  void processTracks(soa::Join<aod::Collisions, aod::Mults, aod::EvSels>::iterator const& collision, soa::Filtered<MyTracksRun3> const& tracks)
-  {
+
+  void processTracks(soa::Join<aod::Collisions, aod::Mults, aod::EvSels>::iterator const& collision, soa::Filtered<MyTracksRun3> const& tracks) {
     /// basic event selection
-    if (!collision.sel8() || TMath::Abs(collision.posZ()) >= 10. || collision.multNTracksPV() <= 1) {
-        return;
-    }
+    if (!collision.sel8() || TMath::Abs(collision.posZ()) >= 10. || collision.multNTracksPV() <= 1) return;
     /// loop over tracks
     int nTracks = 0; /// counter for multiplicity
     int nProtons = 0; /// counter for protons
     int nNuclei = 0; /// counter for deuterons and tritons
-    for (const auto& track : tracks) {
-      if (track.tpcNClsFound() < tpcNClsFound && track.tpcCrossedRowsOverFindableCls() < tpcCrossedRowsOverFindableCls) continue;
+    for (auto& track : tracks) {
+      if (!track.hasITS() || !track.hasTPC() || track.tpcNClsFound() < tpcNClsFound || track.tpcCrossedRowsOverFindableCls() < tpcCrossedRowsOverFindableCls) continue; 
       registry.get<TH1>(HIST("Tracks/heta"))->Fill(track.eta());
       registry.get<TH1>(HIST("Tracks/hphi"))->Fill(track.phi());
       registry.get<TH1>(HIST("Tracks/hsign"))->Fill(track.sign());
@@ -169,26 +185,30 @@ struct trackchecks {
         registry.get<TH2>(HIST("Nuclei/hTPCsignal"))->Fill(track.tpcInnerParam(), track.tpcSignal());
         nNuclei++;
       }
-    }
+    } /// end track loop
+    // LOG(info) << "Tracks: " << nTracks;
+    // LOG(info) << "Protons: " << nProtons;
+    // LOG(info) << "Deuterons: " << nDeuterons;
+    // LOG(info) << "Tritons: " << nTritons;
+
+    /// fill multiplicity histograms
     registry.get<TH1>(HIST("Events/hMultiplicity"))->Fill(nTracks);
     registry.get<TH1>(HIST("Events/hNprotons"))->Fill(nProtons);
     registry.get<TH1>(HIST("Events/hNnuclei"))->Fill(nNuclei);
-  }
+
+  } /// end process
   PROCESS_SWITCH(trackchecks, processTracks, "Process tracks, PID with dE/dx signal", false);
 
-  void processTracksPID(soa::Join<aod::Collisions, aod::Mults, aod::EvSels>::iterator const& collision, soa::Filtered<MyTracksRun2> const& tracks)
-  {
+  void processTracksPID(soa::Join<aod::Collisions, aod::Mults, aod::EvSels>::iterator const& collision, soa::Filtered<MyTracksRun3> const& tracks) {
     /// basic event selection
-    if (!collision.sel7() || TMath::Abs(collision.posZ()) >= 10. || collision.multNTracksPV() <= 1) {
-        return;
-    }
+    if (!collision.sel8() || TMath::Abs(collision.posZ()) >= 10. || collision.multNTracksPV() <= 1) return;
     /// loop over tracks
     int nTracks = 0; /// counter for multiplicity
     int nProtons = 0; /// counter for protons
     int nDeuterons = 0; /// counter for deuterons
     int nTritons = 0; /// counter for tritons
-    for (const auto& track : tracks) {
-      if (track.tpcNClsFound() < tpcNClsFound && track.tpcCrossedRowsOverFindableCls() < tpcCrossedRowsOverFindableCls) continue;
+    for (auto& track : tracks) {
+      if (!track.hasITS() || !track.hasTPC() || track.tpcNClsFound() < tpcNClsFound || track.tpcCrossedRowsOverFindableCls() < tpcCrossedRowsOverFindableCls) continue; 
       registry.get<TH1>(HIST("Tracks/heta"))->Fill(track.eta());
       registry.get<TH1>(HIST("Tracks/hphi"))->Fill(track.phi());
       registry.get<TH1>(HIST("Tracks/hsign"))->Fill(track.sign());
@@ -240,12 +260,19 @@ struct trackchecks {
         registry.get<TH2>(HIST("Triton/hTPCsignal"))->Fill(track.tpcInnerParam(), track.tpcSignal());
         nTritons++;
       }
-    }
+    } /// end track loop
+    // LOG(info) << "Tracks: " << nTracks;
+    // LOG(info) << "Protons: " << nProtons;
+    // LOG(info) << "Deuterons: " << nDeuterons;
+    // LOG(info) << "Tritons: " << nTritons;
+
+    /// fill multiplicity histograms
     registry.get<TH1>(HIST("Events/hMultiplicity"))->Fill(nTracks);
     registry.get<TH1>(HIST("Events/hNprotons"))->Fill(nProtons);
     registry.get<TH1>(HIST("Events/hNnuclei"))->Fill(nDeuterons);
     registry.get<TH1>(HIST("Events/hTritons"))->Fill(nTritons);
-  }
+
+  } /// end process
   PROCESS_SWITCH(trackchecks, processTracksPID, "Process tracks, PID with nsigma", true);
 
 };
