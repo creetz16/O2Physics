@@ -17,7 +17,7 @@ ClassImp(VarManager);
 
 TString VarManager::fgVariableNames[VarManager::kNVars] = {""};
 TString VarManager::fgVariableUnits[VarManager::kNVars] = {""};
-bool VarManager::fgUsedVars[VarManager::kNVars] = {kFALSE};
+bool VarManager::fgUsedVars[VarManager::kNVars] = {false};
 float VarManager::fgValues[VarManager::kNVars] = {0.0f};
 std::map<int, int> VarManager::fgRunMap;
 TString VarManager::fgRunStr = "";
@@ -25,6 +25,8 @@ o2::vertexing::DCAFitterN<2> VarManager::fgFitterTwoProngBarrel;
 o2::vertexing::DCAFitterN<3> VarManager::fgFitterThreeProngBarrel;
 o2::vertexing::FwdDCAFitterN<2> VarManager::fgFitterTwoProngFwd;
 o2::vertexing::FwdDCAFitterN<3> VarManager::fgFitterThreeProngFwd;
+std::map<VarManager::CalibObjects, TObject*> VarManager::fgCalibs;
+bool VarManager::fgRunTPCPostCalibration[4] = {false, false, false, false};
 
 //__________________________________________________________________
 VarManager::VarManager() : TObject()
@@ -110,6 +112,7 @@ void VarManager::FillTrackDerived(float* values)
     values[kP] = values[kPt] * std::cosh(values[kEta]);
   }
 }
+
 //_________________________________________________________________________________________________________________________________________________________________________________
 float VarManager::GetTPCPostCalibMap(float pin, float eta, int particle_type, TString period)
 {
@@ -204,6 +207,30 @@ void VarManager::SetDefaultVarNames()
   fgVariableUnits[kVtxChi2] = "";
   fgVariableNames[kCentVZERO] = "Centrality VZERO";
   fgVariableUnits[kCentVZERO] = "%";
+  fgVariableNames[kCentFT0C] = "Centrality FT0C";
+  fgVariableUnits[kCentFT0C] = "%";
+  fgVariableNames[kMultTPC] = "Multiplicity TPC";
+  fgVariableUnits[kMultTPC] = "";
+  fgVariableNames[kMultFV0A] = "Multiplicity FV0A";
+  fgVariableUnits[kMultFV0A] = "";
+  fgVariableNames[kMultFV0C] = "Multiplicity FV0C";
+  fgVariableUnits[kMultFV0C] = "";
+  fgVariableNames[kMultFT0A] = "Multiplicity FT0A";
+  fgVariableUnits[kMultFT0A] = "";
+  fgVariableNames[kMultFT0C] = "Multiplicity FT0C";
+  fgVariableUnits[kMultFT0C] = "";
+  fgVariableNames[kMultFDDA] = "Multiplicity FDDA";
+  fgVariableUnits[kMultFDDA] = "";
+  fgVariableNames[kMultFDDC] = "Multiplicity FDDC";
+  fgVariableUnits[kMultFDDC] = "";
+  fgVariableNames[kMultZNA] = "Multiplicity ZNA";
+  fgVariableUnits[kMultZNA] = "";
+  fgVariableNames[kMultZNC] = "Multiplicity ZNC";
+  fgVariableUnits[kMultZNC] = "";
+  fgVariableNames[kMultTracklets] = "Multiplicity Tracklets";
+  fgVariableUnits[kMultTracklets] = "";
+  fgVariableNames[kCentFT0C] = "Centrality FT0C";
+  fgVariableUnits[kCentFT0C] = "%";
   fgVariableNames[kMCEventGeneratorId] = "MC Generator ID";
   fgVariableNames[kMCVtxX] = "MC Vtx X";
   fgVariableNames[kMCVtxY] = "MC Vtx Y";
@@ -236,6 +263,8 @@ void VarManager::SetDefaultVarNames()
   fgVariableUnits[kRap] = "";
   fgVariableNames[kMass] = "mass";
   fgVariableUnits[kMass] = "GeV/c2";
+  fgVariableNames[kDeltaPtotTracks] = "#it{p}_{Tot}^{#mu+} - #it{p}_{Tot}^{#mu-}";
+  fgVariableUnits[kDeltaPtotTracks] = "GeV/c";
   fgVariableNames[kCharge] = "charge";
   fgVariableUnits[kCharge] = "";
   fgVariableNames[kPin] = "p_{IN}";
@@ -457,6 +486,8 @@ void VarManager::SetDefaultVarNames()
   fgVariableUnits[kQuadDCAabsXY] = "cm";
   fgVariableNames[kQuadDCAsigXY] = "DCA_{xy}^{quad}";
   fgVariableUnits[kQuadDCAsigXY] = "#sigma";
+  fgVariableNames[kQuadDCAsigXYZ] = "DCA_{xyz}^{quad}";
+  fgVariableUnits[kQuadDCAsigXYZ] = "#sigma";
   fgVariableNames[kTrackDCAsigXY] = "DCA_{xy}";
   fgVariableUnits[kTrackDCAsigXY] = "#sigma";
   fgVariableNames[kTrackDCAsigZ] = "DCA_{z}";
