@@ -33,3 +33,8 @@ o2physics_add_dpl_workflow(strarecostudy
                     SOURCES straRecoStudy.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2::DetectorsBase O2Physics::AnalysisCore
                     COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(nucleireco-qa
+                    SOURCES NucleiRecoQA.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DCAFitter O2Physics::AnalysisCCDB O2::ReconstructionDataFormats KFParticle::KFParticle
+                    COMPONENT_NAME Analysis)
