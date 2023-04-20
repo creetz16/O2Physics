@@ -66,6 +66,9 @@ DECLARE_SOA_COLUMN(TPCCrossedRowsOverFindableCls, tpcCrossedRowsOverFindableCls,
 DECLARE_SOA_COLUMN(TPCNClsFound, tpcNClsFound, int16_t);
 DECLARE_SOA_COLUMN(TPCChi2Ncl, tpcChi2NCl, float);
 DECLARE_SOA_COLUMN(ITSChi2NCl, itsChi2NCl, float);
+DECLARE_SOA_COLUMN(GenPt, genPt, float);           // Momentum of the candidate (x direction)
+DECLARE_SOA_COLUMN(GenPhi, genPhi, float);         // Momentum of the candidate (y direction)
+DECLARE_SOA_COLUMN(GenEta, genEta, float);         // Momentum of the candidate (z direction)
 } // namespace eventtrack
 
 DECLARE_SOA_TABLE(TableCollisions, "AOD", "TableCollisions",
@@ -108,7 +111,10 @@ DECLARE_SOA_TABLE(TableTracks, "AOD", "TableTracks",
                   eventtrack::Beta,
                   eventtrack::TPCNClsCrossedRows,
                   eventtrack::TPCCrossedRowsOverFindableCls,
-                  eventtrack::TPCNClsFound);
+                  eventtrack::TPCNClsFound,
+                  eventtrack::GenPt,
+                  eventtrack::GenPhi,
+                  eventtrack::GenEta);
 } // namespace o2::aod
 
 #endif // PWGLF_DATAMODEL_NUCLEIRECOQATABLES_H_

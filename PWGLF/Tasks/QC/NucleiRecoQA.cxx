@@ -60,9 +60,20 @@ using namespace o2::framework;
 using namespace o2::framework::expressions;
 using namespace o2::dataformats;
 
-struct NucleiRecoQA{
-    /// create collision table
+namespace
+{
+constexpr double betheBlochDefault[1][6]{{-1.e32, -1.e32, -1.e32, -1.e32, -1.e32, -1.e32}};
+static const std::vector<std::string> betheBlochParNames{"p0", "p1", "p2", "p3", "p4", "resolution"};
+static const std::vector<std::string> particleNames{"He3"};
+} // namespace
+
+std::string trackdirs[] = {"Tracks", "Deuterons", "Tritons", "Helium3"};
+//const char* trackdirs[4] = {"Tracks", "Deuterons", "Tritons", "Helium3"};
+
+struct NucleiRecoQA {
+    /// create output tables
     Produces<o2::aod::TableCollisions> tableCollisions;
+    Produces<o2::aod::TableTracks> tableTracks;
 
     /// general
     int runNumber = 0.;
@@ -71,6 +82,14 @@ struct NucleiRecoQA{
     Configurable<bool> isMC{"isMC", false, "Flag to run over MC"};
     Configurable<bool> writeCollTable{"writeCollTable", false, "flag to write collision properties to a table"};
     Configurable<bool> writeTrackTable{"writeTrackTable", false, "flag to write track properties to a table"};
+
+    // bethe bloch parameters
+    Configurable<LabeledArray<double>> cfgBetheBlochParams{"cfgBetheBlochParams", {betheBlochDefault[0], 1, 6, particleNames, betheBlochParNames}, "TPC Bethe-Bloch parameterisation for He3"};
+    Configurable<int> cfgMaterialCorrection{"cfgMaterialCorrection", static_cast<int>(o2::base::Propagator::MatCorrType::USEMatCorrNONE), "Type of material correction"};
+
+    // PDG codes
+    Configurable<int> hyperPdg{"hyperPDG", 1010010030, "PDG code of the hyper-mother (could be 3LamH or 4LamH)"};
+    Configurable<int> heDauPdg{"heDauPDG", 1000020030, "PDG code of the helium (could be 3He or 4He)"};
 
     /// settings for CCDB
     Service<o2::ccdb::BasicCCDBManager> ccdb;
@@ -152,7 +171,7 @@ struct NucleiRecoQA{
         const AxisSpec axMultiplicity{100, -0.5, 99.5};
         const AxisSpec axSignedMomentum{2000, -maxPt, maxPt};
         const AxisSpec axMomentum{2000, 0., maxPt};
-        const AxisSpec axNsigma{1200, -10.0, 6.0};
+        const AxisSpec axNsigma{1200, -20.0, 6.0};
         const AxisSpec axDCA{2500, -0.6, 0.6};
 
         /// histos definitions: events
@@ -182,8 +201,13 @@ struct NucleiRecoQA{
         hist.add("Events/hVertexCovYZ", "PV Cov_{yz}; Cov_{yz} (cm^{2}); entries", kTH1D, {axVtxCov});
         hist.add("Events/hVertexNcontrib", "Real Number of contributors; real N contributors; entries", kTH1D, {axNContrib});
         hist.add("Events/hMultiplicity", "Event multiplicity; multiplicity; entries", kTH1D, {axMultiplicity});
+        hist.add("Events/hMultiplicityDeuterons", "Event multiplicity; # of deuterons; entries", kTH1D, {axMultiplicity});
+        hist.add("Events/hMultiplicityTritons", "Event multiplicity; # of tritons; entries", kTH1D, {axMultiplicity});
+        hist.add("Events/hMultiplicityHelium3", "Event multiplicity; # of helium3; entries", kTH1D, {axMultiplicity});
 
         /// histos definitions: tracks
+        // for (unsigned int i = 0; i < sizeof(trackdirs); i++) {
+        //     auto& dir = trackdirs[i];
         hist.add("Tracks/hpx", "Track momentum x; #it{p}_{x} (GeV/#it{c}); entries", kTH1D, {axMomentum});
         hist.add("Tracks/hpy", "Track momentum y; #it{p}_{y} (GeV/#it{c}); entries", kTH1D, {axMomentum});
         hist.add("Tracks/hpz", "Track momentum z; #it{p}_{z} (GeV/#it{c}); entries", kTH1D, {axMomentum});
@@ -215,7 +239,86 @@ struct NucleiRecoQA{
         hist.add("Tracks/hITSchi2", "Chi2 / clusters for the ITS track segment; #chi^{2}_{ITS}/n_{ITS}; entries", kTH1D, {{51, -0.5, 50.5}});
         hist.add("Tracks/hTPCchi2vsPt", "Chi2 / clusters for the TPC track segment vs pT; #it{p}_{T} (GeV/#it{c}); #chi^{2}_{TPC}/n_{TPC}; entries", kTH2D, {axMomentum, {11, -0.5, 10.5}});
         hist.add("Tracks/hITSchi2vsPt", "Chi2 / clusters for the ITS track segment vs pT; #it{p}_{T} (GeV/#it{c}); #chi^{2}_{ITS}/n_{ITS}", kTH2D, {axMomentum, {51, -0.5, 50.5}});
+        hist.add("Tracks/hPtResolution", "pT resolution; #it{p}^{gen}_{T} (GeV/#it{c}); (#it{p}^{gen}_{T}-#it{p}^{reco}_{T})/#it{p}^{gen}_{T}", kTH2D, {axMomentum, {1000, -10, 10}});
+        hist.add("Tracks/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
+        hist.add("Tracks/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tracks/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
 
+        hist.add("Deuterons/hpx", "Track momentum x; #it{p}_{x} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hpy", "Track momentum y; #it{p}_{y} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hpz", "Track momentum z; #it{p}_{z} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hpt", "Transverse momentum; #it{p}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hp", "Track momentum; #it{p} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hSign", "Track sign; ; entries", kTH1D, {{2, -2., 2.}});
+        hist.add("Deuterons/hEta", "Track eta; #eta; entries", kTH1D, {{500, -1., 1.}});
+        hist.add("Deuterons/hPhi", "Track phi; #phi; entries", kTH1D, {{500, 0, 6.5}});
+        hist.add("Deuterons/hEtaPhi", "Track eta vs phi; #eta; #phi", kTH2D, {{500, -1., 1.}, {500, 0, 6.5}});
+        hist.add("Deuterons/hTPCinnerParam", "TPC mommentum; #it{p}_{TPC} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hTPCSignal", "TPC signal vs TPC momentum; #it{p}_{TPC}/Z (GeV/#it{c}); d#it{E}/d#it{x} (A.U.)", kTH2D, {axSignedMomentum, {1000, 20., 500.}});
+        hist.add("Deuterons/hTPCNSigmaPr", "nSigma TPC proton; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(p)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Deuterons/hTPCNSigmaDe", "nSigma TPC deuteron; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(de)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Deuterons/hTPCNSigmaTr", "nSigma TPC triton; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(tr)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Deuterons/hTPCNSigmaHe", "nSigma TPC helium; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(he)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Deuterons/hDCAxy", "DCA_{xy} to PV; DCA_{xy} (cm); entries", kTH1D, {axDCA});
+        hist.add("Deuterons/hDCAz", "DCA_{z} to PV; DCA_{z} (cm); entries", kTH1D, {axDCA});
+        hist.add("Deuterons/hDCAxyVsDCAz", "DCA_{xy} vs DCA_{z} to PV; DCA_{xy} (cm); DCA_{z} (cm)", kTH2D, {axDCA, axDCA});
+        hist.add("Deuterons/hDCAxyVsPt", "DCA_{xy} vs pT; #it{p}_{T} (GeV/#it{c}); DCA_{xy} (cm)", kTH2D, {axMomentum, axDCA});
+        hist.add("Deuterons/hDCAzVsPt", "DCA_{z} vs pT; #it{p}_{T} (GeV/#it{c}); DCA_{z} (cm)", kTH2D, {axMomentum, axDCA});
+        hist.add("Deuterons/hPtResolution", "pT resolution; #it{p}^{gen}_{T} (GeV/#it{c}); (#it{p}^{gen}_{T}-#it{p}^{reco}_{T})/#it{p}^{gen}_{T}", kTH2D, {axMomentum, {1000, -10, 10}});
+        hist.add("Deuterons/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
+        hist.add("Deuterons/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
+
+        hist.add("Tritons/hpx", "Track momentum x; #it{p}_{x} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hpy", "Track momentum y; #it{p}_{y} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hpz", "Track momentum z; #it{p}_{z} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hpt", "Transverse momentum; #it{p}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hp", "Track momentum; #it{p} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hSign", "Track sign; ; entries", kTH1D, {{2, -2., 2.}});
+        hist.add("Tritons/hEta", "Track eta; #eta; entries", kTH1D, {{500, -1., 1.}});
+        hist.add("Tritons/hPhi", "Track phi; #phi; entries", kTH1D, {{500, 0, 6.5}});
+        hist.add("Tritons/hEtaPhi", "Track eta vs phi; #eta; #phi", kTH2D, {{500, -1., 1.}, {500, 0, 6.5}});
+        hist.add("Tritons/hTPCinnerParam", "TPC mommentum; #it{p}_{TPC} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hTPCSignal", "TPC signal vs TPC momentum; #it{p}_{TPC}/Z (GeV/#it{c}); d#it{E}/d#it{x} (A.U.)", kTH2D, {axSignedMomentum, {1000, 20., 500.}});
+        hist.add("Tritons/hTPCNSigmaPr", "nSigma TPC proton; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(p)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Tritons/hTPCNSigmaDe", "nSigma TPC deuteron; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(de)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Tritons/hTPCNSigmaTr", "nSigma TPC triton; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(tr)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Tritons/hTPCNSigmaHe", "nSigma TPC helium; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(he)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Tritons/hDCAxy", "DCA_{xy} to PV; DCA_{xy} (cm); entries", kTH1D, {axDCA});
+        hist.add("Tritons/hDCAz", "DCA_{z} to PV; DCA_{z} (cm); entries", kTH1D, {axDCA});
+        hist.add("Tritons/hDCAxyVsDCAz", "DCA_{xy} vs DCA_{z} to PV; DCA_{xy} (cm); DCA_{z} (cm)", kTH2D, {axDCA, axDCA});
+        hist.add("Tritons/hDCAxyVsPt", "DCA_{xy} vs pT; #it{p}_{T} (GeV/#it{c}); DCA_{xy} (cm)", kTH2D, {axMomentum, axDCA});
+        hist.add("Tritons/hDCAzVsPt", "DCA_{z} vs pT; #it{p}_{T} (GeV/#it{c}); DCA_{z} (cm)", kTH2D, {axMomentum, axDCA});
+        hist.add("Tritons/hPtResolution", "pT resolution; #it{p}^{gen}_{T} (GeV/#it{c}); (#it{p}^{gen}_{T}-#it{p}^{reco}_{T})/#it{p}^{gen}_{T}", kTH2D, {axMomentum, {1000, -10, 10}});
+        hist.add("Tritons/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
+        hist.add("Tritons/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
+
+        hist.add("Helium3/hpx", "Track momentum x; #it{p}_{x} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hpy", "Track momentum y; #it{p}_{y} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hpz", "Track momentum z; #it{p}_{z} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hpt", "Transverse momentum; #it{p}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hp", "Track momentum; #it{p} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hSign", "Track sign; ; entries", kTH1D, {{2, -2., 2.}});
+        hist.add("Helium3/hEta", "Track eta; #eta; entries", kTH1D, {{500, -1., 1.}});
+        hist.add("Helium3/hPhi", "Track phi; #phi; entries", kTH1D, {{500, 0, 6.5}});
+        hist.add("Helium3/hEtaPhi", "Track eta vs phi; #eta; #phi", kTH2D, {{500, -1., 1.}, {500, 0, 6.5}});
+        hist.add("Helium3/hTPCinnerParam", "TPC mommentum; #it{p}_{TPC} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hTPCSignal", "TPC signal vs TPC momentum; #it{p}_{TPC}/Z (GeV/#it{c}); d#it{E}/d#it{x} (A.U.)", kTH2D, {axSignedMomentum, {1000, 20., 500.}});
+        hist.add("Helium3/hTPCNSigmaPr", "nSigma TPC proton; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(p)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Helium3/hTPCNSigmaDe", "nSigma TPC deuteron; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(de)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Helium3/hTPCNSigmaTr", "nSigma TPC triton; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(tr)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Helium3/hTPCNSigmaHe", "nSigma TPC helium; #it{p}_{T} (GeV/#it{c}); n#it{#sigma}_{TPC}(he)", kTH2D, {axMomentum, axNsigma});
+        hist.add("Helium3/hDCAxy", "DCA_{xy} to PV; DCA_{xy} (cm); entries", kTH1D, {axDCA});
+        hist.add("Helium3/hDCAz", "DCA_{z} to PV; DCA_{z} (cm); entries", kTH1D, {axDCA});
+        hist.add("Helium3/hDCAxyVsDCAz", "DCA_{xy} vs DCA_{z} to PV; DCA_{xy} (cm); DCA_{z} (cm)", kTH2D, {axDCA, axDCA});
+        hist.add("Helium3/hDCAxyVsPt", "DCA_{xy} vs pT; #it{p}_{T} (GeV/#it{c}); DCA_{xy} (cm)", kTH2D, {axMomentum, axDCA});
+        hist.add("Helium3/hDCAzVsPt", "DCA_{z} vs pT; #it{p}_{T} (GeV/#it{c}); DCA_{z} (cm)", kTH2D, {axMomentum, axDCA});
+        hist.add("Helium3/hPtResolution", "pT resolution; #it{p}^{gen}_{T} (GeV/#it{c}); (#it{p}^{gen}_{T}-#it{p}^{reco}_{T})/#it{p}^{gen}_{T}", kTH2D, {axMomentum, {1000, -10, 10}});
+        hist.add("Helium3/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
+        hist.add("Helium3/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
+        
     } /// end init function
 
     /// TODO: event selections: sel8, nContr>1, Vtx_z<10
@@ -289,6 +392,78 @@ struct NucleiRecoQA{
         hist.fill(HIST("Tracks/hITSchi2vsPt"), track.pt(), track.itsChi2NCl());
     }
 
+    template <typename TrackType>
+    void fillDeuteronHistos(const TrackType& track) {
+        hist.fill(HIST("Deuterons/hpx"), track.px());
+        hist.fill(HIST("Deuterons/hpy"), track.py());
+        hist.fill(HIST("Deuterons/hpz"), track.pz());
+        hist.fill(HIST("Deuterons/hpt"), track.pt());
+        hist.fill(HIST("Deuterons/hp"), track.p());
+        hist.fill(HIST("Deuterons/hSign"), track.sign());
+        hist.fill(HIST("Deuterons/hEta"), track.eta());
+        hist.fill(HIST("Deuterons/hPhi"), track.phi());
+        hist.fill(HIST("Deuterons/hEtaPhi"), track.eta(), track.phi());
+        hist.fill(HIST("Deuterons/hTPCinnerParam"), track.tpcInnerParam());
+        hist.fill(HIST("Deuterons/hTPCSignal"), track.tpcInnerParam() * track.sign(), track.tpcSignal());
+        hist.fill(HIST("Deuterons/hTPCNSigmaPr"), track.tpcInnerParam(), track.tpcNSigmaPr());
+        hist.fill(HIST("Deuterons/hTPCNSigmaDe"), track.tpcInnerParam(), track.tpcNSigmaDe());
+        hist.fill(HIST("Deuterons/hTPCNSigmaTr"), track.tpcInnerParam(), track.tpcNSigmaTr());
+        hist.fill(HIST("Deuterons/hTPCNSigmaHe"), track.tpcInnerParam(), track.tpcNSigmaHe());
+        hist.fill(HIST("Deuterons/hDCAxy"), track.dcaXY());
+        hist.fill(HIST("Deuterons/hDCAz"), track.dcaZ());
+        hist.fill(HIST("Deuterons/hDCAxyVsDCAz"), track.dcaXY(), track.dcaZ());
+        hist.fill(HIST("Deuterons/hDCAxyVsPt"), track.pt(), track.dcaXY());
+        hist.fill(HIST("Deuterons/hDCAzVsPt"), track.pt(), track.dcaZ());
+    }
+
+    template <typename TrackType>
+    void fillTritonHistos(const TrackType& track) {
+        hist.fill(HIST("Tritons/hpx"), track.px());
+        hist.fill(HIST("Tritons/hpy"), track.py());
+        hist.fill(HIST("Tritons/hpz"), track.pz());
+        hist.fill(HIST("Tritons/hpt"), track.pt());
+        hist.fill(HIST("Tritons/hp"), track.p());
+        hist.fill(HIST("Tritons/hSign"), track.sign());
+        hist.fill(HIST("Tritons/hEta"), track.eta());
+        hist.fill(HIST("Tritons/hPhi"), track.phi());
+        hist.fill(HIST("Tritons/hEtaPhi"), track.eta(), track.phi());
+        hist.fill(HIST("Tritons/hTPCinnerParam"), track.tpcInnerParam());
+        hist.fill(HIST("Tritons/hTPCSignal"), track.tpcInnerParam() * track.sign(), track.tpcSignal());
+        hist.fill(HIST("Tritons/hTPCNSigmaPr"), track.tpcInnerParam(), track.tpcNSigmaPr());
+        hist.fill(HIST("Tritons/hTPCNSigmaDe"), track.tpcInnerParam(), track.tpcNSigmaDe());
+        hist.fill(HIST("Tritons/hTPCNSigmaTr"), track.tpcInnerParam(), track.tpcNSigmaTr());
+        hist.fill(HIST("Tritons/hTPCNSigmaHe"), track.tpcInnerParam(), track.tpcNSigmaHe());
+        hist.fill(HIST("Tritons/hDCAxy"), track.dcaXY());
+        hist.fill(HIST("Tritons/hDCAz"), track.dcaZ());
+        hist.fill(HIST("Tritons/hDCAxyVsDCAz"), track.dcaXY(), track.dcaZ());
+        hist.fill(HIST("Tritons/hDCAxyVsPt"), track.pt(), track.dcaXY());
+        hist.fill(HIST("Tritons/hDCAzVsPt"), track.pt(), track.dcaZ());
+    }
+
+    template <typename TrackType>
+    void fillHeliumHistos(const TrackType& track) {
+        hist.fill(HIST("Helium3/hpx"), track.px());
+        hist.fill(HIST("Helium3/hpy"), track.py());
+        hist.fill(HIST("Helium3/hpz"), track.pz());
+        hist.fill(HIST("Helium3/hpt"), track.pt());
+        hist.fill(HIST("Helium3/hp"), track.p());
+        hist.fill(HIST("Helium3/hSign"), track.sign());
+        hist.fill(HIST("Helium3/hEta"), track.eta());
+        hist.fill(HIST("Helium3/hPhi"), track.phi());
+        hist.fill(HIST("Helium3/hEtaPhi"), track.eta(), track.phi());
+        hist.fill(HIST("Helium3/hTPCinnerParam"), track.tpcInnerParam());
+        hist.fill(HIST("Helium3/hTPCSignal"), track.tpcInnerParam() * track.sign(), track.tpcSignal());
+        hist.fill(HIST("Helium3/hTPCNSigmaPr"), track.tpcInnerParam(), track.tpcNSigmaPr());
+        hist.fill(HIST("Helium3/hTPCNSigmaDe"), track.tpcInnerParam(), track.tpcNSigmaDe());
+        hist.fill(HIST("Helium3/hTPCNSigmaTr"), track.tpcInnerParam(), track.tpcNSigmaTr());
+        hist.fill(HIST("Helium3/hTPCNSigmaHe"), track.tpcInnerParam(), track.tpcNSigmaHe());
+        hist.fill(HIST("Helium3/hDCAxy"), track.dcaXY());
+        hist.fill(HIST("Helium3/hDCAz"), track.dcaZ());
+        hist.fill(HIST("Helium3/hDCAxyVsDCAz"), track.dcaXY(), track.dcaZ());
+        hist.fill(HIST("Helium3/hDCAxyVsPt"), track.pt(), track.dcaXY());
+        hist.fill(HIST("Helium3/hDCAzVsPt"), track.pt(), track.dcaZ());
+    }
+
     /// function to fill the event tree
     template <typename CollisionType>
     void fillCollisionTable(const CollisionType& collision) {
@@ -309,7 +484,7 @@ struct NucleiRecoQA{
     using CollisionTable = soa::Join<aod::Collisions, aod::Mults, aod::EvSels>;
     using TrackTable = soa::Join<aod::Tracks, aod::TracksExtra, aod::TrackSelection, aod::TracksDCA, aod::pidTOFbeta, aod::pidTPCFullPr, aod::pidTPCFullDe, aod::pidTPCFullTr, aod::pidTPCFullHe, aod::pidTOFFullPr, aod::pidTOFFullDe, aod::pidTOFFullTr, aod::pidTOFFullHe>;
 
-    /// process function data
+    /// process function data --> only MC process function further updated, this is obsolete for now!!
     void processData(CollisionTable::iterator const& collision, 
                    soa::Filtered<TrackTable> const& tracks, /// Filter: Filterbit Global track, ...
                    aod::BCsWithTimestamps const&) {
@@ -353,7 +528,8 @@ struct NucleiRecoQA{
     /// process function MC
     void processMC(soa::Join<CollisionTable, aod::McCollisionLabels>::iterator const& collision, 
                    soa::Filtered<soa::Join<TrackTable, aod::McTrackLabels>> const& tracks, /// Filter: Filterbit Global track, ...
-                   aod::BCsWithTimestamps const&, aod::McCollisions const& mcCollisions) {
+                   aod::BCsWithTimestamps const&, aod::McCollisions const& mcCollisions, 
+                   aod::McParticles const& particlesMC) {
         auto bc = collision.bc_as<aod::BCsWithTimestamps>();
         if (runNumber!=bc.runNumber()) {
             initMagneticFieldCCDB(bc, runNumber, ccdb, isRun3 ? ccdbPathGrpMag:ccdbPathGrp, lut, isRun3);
@@ -383,15 +559,71 @@ struct NucleiRecoQA{
 
         /// track loop to get event multiplicity
         int nTracks = 0.;
+        int nDeuterons = 0.;
+        int nTritons = 0.;
+        int nHelium3 = 0.;
         for (auto& track : tracks) {
             /// apply track selection
-            if (!isTrackInAcceptance(track)) return; /// eta filter
-            if (track.pt() < ptMin) return; /// pT selection
-            if (track.tpcNClsFound() < tpcNClsFound || track.tpcSignal() < dEdxMin) return;
+            if (!isTrackInAcceptance(track)) continue; /// eta filter
+            /// fill histograms
             fillTrackHistos(track);
             nTracks++;
+
+            /// select deuterons
+            if (track.tpcNSigmaDe() > 0 && track.tpcNSigmaDe() < 4 && track.pt() > 0.3) {
+                fillDeuteronHistos(track);
+                nDeuterons++;
+                // access MC truth information with mcCollision() and mcParticle() methods
+                if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size()) {
+                    auto GenPt = track.mcParticle().pt();
+                    auto RecoPt = track.pt();
+                    auto deltaPt = GenPt - RecoPt;
+                    auto deltaPhi = track.mcParticle().phi() - track.phi();
+                    hist.fill(HIST("Deuterons/hPtResolution"), GenPt, deltaPt);
+                    hist.fill(HIST("Deuterons/hGenPt"), GenPt);
+                    hist.fill(HIST("Deuterons/hDeltaPt"), deltaPt);
+                    hist.fill(HIST("Deuterons/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
+                };
+            };
+
+            /// select tritons
+            if (track.tpcNSigmaTr() > -0.5 && track.tpcNSigmaTr() < 4 && track.pt() > 0.9) {
+                fillTritonHistos(track);
+                nTritons++;
+                // access MC truth information with mcCollision() and mcParticle() methods
+                if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size()) {
+                    auto GenPt = track.mcParticle().pt();
+                    auto RecoPt = track.pt();
+                    auto deltaPt = GenPt - RecoPt;
+                    auto deltaPhi = track.mcParticle().phi() - track.phi();
+                    hist.fill(HIST("Tritons/hPtResolution"), GenPt, deltaPt);
+                    hist.fill(HIST("Tritons/hGenPt"), GenPt);
+                    hist.fill(HIST("Tritons/hDeltaPt"), deltaPt);
+                    hist.fill(HIST("Tritons/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
+                };
+            };
+
+            /// select helium3 with high dE/dx
+            if (track.pt() > ptMin && track.tpcSignal() > dEdxMin) {
+                fillHeliumHistos(track);
+                nHelium3++;
+                // access MC truth information with mcCollision() and mcParticle() methods
+                if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size()) {
+                    auto GenPt = track.mcParticle().pt();
+                    auto RecoPt = track.pt();
+                    auto deltaPt = GenPt - RecoPt;
+                    auto deltaPhi = track.mcParticle().phi() - track.phi();
+                    hist.fill(HIST("Helium3/hPtResolution"), GenPt, deltaPt);
+                    hist.fill(HIST("Helium3/hGenPt"), GenPt);
+                    hist.fill(HIST("Helium3/hDeltaPt"), deltaPt);
+                    hist.fill(HIST("Helium3/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
+                };
+            };
         }
         hist.fill(HIST("Events/hMultiplicity"), nTracks);
+        hist.fill(HIST("Events/hMultiplicityDeuterons"), nDeuterons);
+        hist.fill(HIST("Events/hMultiplicityTritons"), nTritons);
+        hist.fill(HIST("Events/hMultiplicityHelium3"), nHelium3);
     }
     PROCESS_SWITCH(NucleiRecoQA, processMC, "process MC", false);
 };
