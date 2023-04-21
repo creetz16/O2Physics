@@ -318,6 +318,9 @@ struct NucleiRecoQA {
         hist.add("Helium3/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
         hist.add("Helium3/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
         hist.add("Helium3/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
+
+        hist.add("Nuclei/hRecoPt", "Transverse momentum; #it{p}^{reco}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
+        hist.add("Nuclei/hGenPt", "Transverse momentum; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
         
     } /// end init function
 
@@ -569,8 +572,13 @@ struct NucleiRecoQA {
             fillTrackHistos(track);
             nTracks++;
 
+            // ======== number of nuclei for tracking efficiency =========
+            if ((track.tpcNSigmaDe() > 1.2 && track.tpcNSigmaDe() < 4 && track.tpcInnerParam() < 2.7) || (track.tpcNSigmaTr() > 0.8 && track.tpcNSigmaTr() < 4 && track.tpcInnerParam() < 4.0) || (track.tpcNSigmaHe() > -9 && track.tpcNSigmaHe() < 4)) {
+                hist.fill(HIST("Nuclei/hRecoPt"), track.pt());
+            };
+
             /// select deuterons
-            if (track.tpcNSigmaDe() > 0 && track.tpcNSigmaDe() < 4 && track.pt() > 0.3) {
+            if (track.tpcNSigmaDe() > 1.2 && track.tpcNSigmaDe() < 4 && track.tpcInnerParam() < 2.7) {
                 fillDeuteronHistos(track);
                 nDeuterons++;
                 // access MC truth information with mcCollision() and mcParticle() methods
@@ -587,7 +595,7 @@ struct NucleiRecoQA {
             };
 
             /// select tritons
-            if (track.tpcNSigmaTr() > -0.5 && track.tpcNSigmaTr() < 4 && track.pt() > 0.9) {
+            if (track.tpcNSigmaTr() > 0.8 && track.tpcNSigmaTr() < 4 && track.tpcInnerParam() < 4.0) {
                 fillTritonHistos(track);
                 nTritons++;
                 // access MC truth information with mcCollision() and mcParticle() methods
@@ -604,7 +612,8 @@ struct NucleiRecoQA {
             };
 
             /// select helium3 with high dE/dx
-            if (track.pt() > ptMin && track.tpcSignal() > dEdxMin) {
+            //if (track.pt() > ptMin && track.tpcSignal() > dEdxMin) {
+            if (track.tpcNSigmaHe() > -9 && track.tpcNSigmaHe() < 4) {
                 fillHeliumHistos(track);
                 nHelium3++;
                 // access MC truth information with mcCollision() and mcParticle() methods
@@ -620,6 +629,13 @@ struct NucleiRecoQA {
                 };
             };
         }
+
+        // ========= calculate tracking efficiency for injected nuclei ===========
+        for (auto& mcpart : particlesMC) {
+            if (!isTrackInAcceptance(mcpart)) continue; /// eta filter
+            hist.fill(HIST("Nuclei/hGenPt"), mcpart.pt());
+        }
+
         hist.fill(HIST("Events/hMultiplicity"), nTracks);
         hist.fill(HIST("Events/hMultiplicityDeuterons"), nDeuterons);
         hist.fill(HIST("Events/hMultiplicityTritons"), nTritons);
