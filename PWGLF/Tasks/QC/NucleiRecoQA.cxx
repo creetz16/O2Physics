@@ -12,7 +12,7 @@
 ///
 /// \file   nucleiRecoQA.cxx
 /// \author 
-/// \brief  task to study nuclei momentum reconstruction
+/// \brief  task to study nuclei reconstruction
 
 #include <PWGLF/DataModel/NucleiRecoQA.h>
 #include <CCDB/BasicCCDBManager.h>
@@ -68,7 +68,6 @@ static const std::vector<std::string> particleNames{"He3"};
 } // namespace
 
 std::string trackdirs[] = {"Tracks", "Deuterons", "Tritons", "Helium3"};
-//const char* trackdirs[4] = {"Tracks", "Deuterons", "Tritons", "Helium3"};
 
 struct NucleiRecoQA {
     /// create output tables
@@ -88,15 +87,19 @@ struct NucleiRecoQA {
     Configurable<int> cfgMaterialCorrection{"cfgMaterialCorrection", static_cast<int>(o2::base::Propagator::MatCorrType::USEMatCorrNONE), "Type of material correction"};
 
     // PDG codes
-    Configurable<int> hyperPdg{"hyperPDG", 1010010030, "PDG code of the hyper-mother (could be 3LamH or 4LamH)"};
-    Configurable<int> heDauPdg{"heDauPDG", 1000020030, "PDG code of the helium (could be 3He or 4He)"};
+    int dePdg = 1000010020;
+    int trPdg = 1000010030;
+    int hePdg = 1000020030;
+    int antidePdg = -1000010020;
+    int antitrPdg = -1000010030;
+    int antihePdg = -1000020030;
 
     /// settings for CCDB
     Service<o2::ccdb::BasicCCDBManager> ccdb;
     Configurable<std::string> ccdbUrl{"ccdbUrl", "http://alice-ccdb.cern.ch", "url of the ccdb repository"};
-    Configurable<std::string> ccdbPathLut{"ccdbPathLut", "GLO/Param/MatLUT", "Path for LUT parametrization"}; /// what is this lut??? -> material budget distribution?
+    Configurable<std::string> ccdbPathLut{"ccdbPathLut", "GLO/Param/MatLUT", "Path for LUT parametrization"}; /// material budget distribution
     Configurable<std::string> ccdbPathGeo{"ccdbPathGeo", "GLO/Config/GeometryAligned", "Path of the geometry file"};
-    Configurable<std::string> ccdbPathGrp{"ccdbPathGrp", "GLO/GRP/GRP", "Path of the grp file (Run 2)"}; /// grp? -> needed for magnet field in Run 3?
+    Configurable<std::string> ccdbPathGrp{"ccdbPathGrp", "GLO/GRP/GRP", "Path of the grp file (Run 2)"}; /// needed for magnet field in Run 3?
     Configurable<std::string> ccdbPathGrpMag{"ccdbPathGrpMag", "GLO/Config/GRPMagField", "CCDB path of the GRPMagField object (Run 3)"};
     o2::base::MatLayerCylSet* lut; 
 
@@ -106,7 +109,7 @@ struct NucleiRecoQA {
     /// track selection
     Configurable<int> trackSelType{"trackSelType", 1, "option for track selection: 0 = no cut, 1 = kGlobalTrack, 2 = kGlobalTrackWoPtEta, 3 = kGlobalTrackWoDCA, 4 = kQualityTracks, 5 = kInAcceptanceTracks"};
     Configurable<bool> trackSel{"trackSel", true, "basic track selection"};
-    Configurable<float> eta{"eta", 0.8, "eta"}; // expression table
+    Configurable<float> eta{"eta", 0.8, "eta"}; // expression
     Configurable<float> tpcNClsFound{"tpcNClsFound", 100, "Number of TPC clusters"}; // dynamic
     Configurable<float> dEdxMin{"dEdxMin", 240, "Minimum dE/dx"}; 
     Configurable<float> ptMin{"ptMin", 1.5, "Minimum track pT"}; 
@@ -149,18 +152,18 @@ struct NucleiRecoQA {
         mRunNumber = bc.runNumber(); /// set mRunNumber variable to current run number
     } /// end initMagneticFieldCCDB
 
-    void init(InitContext const&) { /// what is actually passed to the function ?
+    void init(InitContext const&) {
         //if ((processData == true) && (processMC == true)) LOGF(fatal, "Cannot enable processData and processMC at the same time. Please choose one.");
 
         ccdb->setURL(ccdbUrl.value); /// set CCDB url
         ccdb->setCaching(true); /// enabling object chaching
-        ccdb->setLocalObjectValidityChecking(); /// what happens here?
+        ccdb->setLocalObjectValidityChecking();
         lut = o2::base::MatLayerCylSet::rectifyPtrFromFile(ccdb->get<o2::base::MatLayerCylSet>(ccdbPathLut)); /// "fill" lut pointer with actual material budget info from specified CCDB path
         if (!o2::base::GeometryManager::isGeometryLoaded()) {
-            ccdb->get<TGeoManager>(ccdbPathGeo); /// load geometry from specified CCDB path (what does this mean? what happens?)
+            ccdb->get<TGeoManager>(ccdbPathGeo); /// load geometry from specified CCDB path
         }
 
-        /// set runNumber variable to 0 (WHY???)
+        /// set runNumber variable to 0
         runNumber = 0; 
 
         /// axis definitions
@@ -267,6 +270,8 @@ struct NucleiRecoQA {
         hist.add("Deuterons/hPtResolution", "pT resolution; #it{p}^{gen}_{T} (GeV/#it{c}); (#it{p}^{gen}_{T}-#it{p}^{reco}_{T})/#it{p}^{gen}_{T}", kTH2D, {axMomentum, {1000, -10, 10}});
         hist.add("Deuterons/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
         hist.add("Deuterons/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Deuterons/hGenPt_wideBinning", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
+        hist.add("Deuterons/hRecoPt_wideBinning", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
         hist.add("Deuterons/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
 
         hist.add("Tritons/hpx", "Track momentum x; #it{p}_{x} (GeV/#it{c}); entries", kTH1D, {axMomentum});
@@ -292,6 +297,8 @@ struct NucleiRecoQA {
         hist.add("Tritons/hPtResolution", "pT resolution; #it{p}^{gen}_{T} (GeV/#it{c}); (#it{p}^{gen}_{T}-#it{p}^{reco}_{T})/#it{p}^{gen}_{T}", kTH2D, {axMomentum, {1000, -10, 10}});
         hist.add("Tritons/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
         hist.add("Tritons/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Tritons/hGenPt_wideBinning", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
+        hist.add("Tritons/hRecoPt_wideBinning", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
         hist.add("Tritons/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
 
         hist.add("Helium3/hpx", "Track momentum x; #it{p}_{x} (GeV/#it{c}); entries", kTH1D, {axMomentum});
@@ -317,15 +324,13 @@ struct NucleiRecoQA {
         hist.add("Helium3/hPtResolution", "pT resolution; #it{p}^{gen}_{T} (GeV/#it{c}); (#it{p}^{gen}_{T}-#it{p}^{reco}_{T})/#it{p}^{gen}_{T}", kTH2D, {axMomentum, {1000, -10, 10}});
         hist.add("Helium3/hPhiResolution", "phi resolution; #phi^{gen}; (#phi^{gen}-#phi^{reco})/#phi^{gen}", kTH2D, {{500, 0, 6.5}, {100, -0.005, 0.05}});
         hist.add("Helium3/hGenPt", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {axMomentum});
+        hist.add("Helium3/hGenPt_wideBinning", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
+        hist.add("Helium3/hRecoPt_wideBinning", "Generated pT; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
         hist.add("Helium3/hDeltaPt", "#phi^{gen}-#it{p}^{reco}_{T}; (#phi^{gen}-#it{p}^{reco}_{T}) (GeV/#it{c}); entries", kTH1D, {{1000, -10, 10}});
-
-        hist.add("Nuclei/hRecoPt", "Transverse momentum; #it{p}^{reco}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
-        hist.add("Nuclei/hGenPt", "Transverse momentum; #it{p}^{gen}_{T} (GeV/#it{c}); entries", kTH1D, {{40, -0.1, 7.9}});
         
     } /// end init function
 
-    /// TODO: event selections: sel8, nContr>1, Vtx_z<10
-    /// event selection function (to be used later on)
+    /// event selection function
     template <typename CollisionType>
     bool isSelectedColl(const CollisionType& collision) { /// here I have to pass a single collision
         if (isRun3) {
@@ -494,7 +499,7 @@ struct NucleiRecoQA {
         auto bc = collision.bc_as<aod::BCsWithTimestamps>();
         if (runNumber!=bc.runNumber()) {
             initMagneticFieldCCDB(bc, runNumber, ccdb, isRun3 ? ccdbPathGrpMag:ccdbPathGrp, lut, isRun3);
-            magneticField = o2::base::Propagator::Instance()->getNominalBz(); /// what is happening here??
+            magneticField = o2::base::Propagator::Instance()->getNominalBz();
         }
         /// fill first bin of event selection hist
         hist.fill(HIST("Events/hEventSels"), 1.f);
@@ -536,7 +541,7 @@ struct NucleiRecoQA {
         auto bc = collision.bc_as<aod::BCsWithTimestamps>();
         if (runNumber!=bc.runNumber()) {
             initMagneticFieldCCDB(bc, runNumber, ccdb, isRun3 ? ccdbPathGrpMag:ccdbPathGrp, lut, isRun3);
-            magneticField = o2::base::Propagator::Instance()->getNominalBz(); /// what is happening here??
+            magneticField = o2::base::Propagator::Instance()->getNominalBz();
         }
         /// fill first bin of event selection hist
         hist.fill(HIST("Events/hEventSels"), 1.f);
@@ -571,69 +576,76 @@ struct NucleiRecoQA {
             /// fill histograms
             fillTrackHistos(track);
             nTracks++;
-
-            // ======== number of nuclei for tracking efficiency =========
-            if ((track.tpcNSigmaDe() > 1.2 && track.tpcNSigmaDe() < 4 && track.tpcInnerParam() < 2.7) || (track.tpcNSigmaTr() > 0.8 && track.tpcNSigmaTr() < 4 && track.tpcInnerParam() < 4.0) || (track.tpcNSigmaHe() > -9 && track.tpcNSigmaHe() < 4)) {
-                hist.fill(HIST("Nuclei/hRecoPt"), track.pt());
-            };
-
-            /// select deuterons
-            if (track.tpcNSigmaDe() > 1.2 && track.tpcNSigmaDe() < 4 && track.tpcInnerParam() < 2.7) {
+            
+            /// select deuterons with nsigma
+            // if (track.tpcNSigmaDe() > 1.2 && track.tpcNSigmaDe() < 4 && track.tpcInnerParam() < 2.7) {
+            //     fillDeuteronHistos(track);
+            // select deuterons with pdg code
+            // access MC truth information with mcParticle() method
+            if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size() && track.mcParticle().pdgCode() == dePdg) {
                 fillDeuteronHistos(track);
                 nDeuterons++;
-                // access MC truth information with mcCollision() and mcParticle() methods
-                if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size()) {
-                    auto GenPt = track.mcParticle().pt();
-                    auto RecoPt = track.pt();
-                    auto deltaPt = GenPt - RecoPt;
-                    auto deltaPhi = track.mcParticle().phi() - track.phi();
-                    hist.fill(HIST("Deuterons/hPtResolution"), GenPt, deltaPt);
-                    hist.fill(HIST("Deuterons/hGenPt"), GenPt);
-                    hist.fill(HIST("Deuterons/hDeltaPt"), deltaPt);
-                    hist.fill(HIST("Deuterons/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
-                };
+                auto GenPt = track.mcParticle().pt();
+                auto RecoPt = track.pt();
+                auto deltaPt = GenPt - RecoPt;
+                auto deltaPhi = track.mcParticle().phi() - track.phi();
+                hist.fill(HIST("Deuterons/hPtResolution"), GenPt, deltaPt);
+                hist.fill(HIST("Deuterons/hGenPt"), GenPt);
+                hist.fill(HIST("Deuterons/hDeltaPt"), deltaPt);
+                hist.fill(HIST("Deuterons/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
+                hist.fill(HIST("Deuterons/hRecoPt_wideBinning"), RecoPt);
             };
 
             /// select tritons
-            if (track.tpcNSigmaTr() > 0.8 && track.tpcNSigmaTr() < 4 && track.tpcInnerParam() < 4.0) {
+            // if (track.tpcNSigmaTr() > 0.8 && track.tpcNSigmaTr() < 4 && track.tpcInnerParam() < 4.0) {
+            //     fillTritonHistos(track);
+            //     nTritons++;
+            // select tritons with pdg code
+            // access MC truth information with mcParticle() method
+            if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size() && track.mcParticle().pdgCode() == trPdg) {
                 fillTritonHistos(track);
                 nTritons++;
-                // access MC truth information with mcCollision() and mcParticle() methods
-                if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size()) {
-                    auto GenPt = track.mcParticle().pt();
-                    auto RecoPt = track.pt();
-                    auto deltaPt = GenPt - RecoPt;
-                    auto deltaPhi = track.mcParticle().phi() - track.phi();
-                    hist.fill(HIST("Tritons/hPtResolution"), GenPt, deltaPt);
-                    hist.fill(HIST("Tritons/hGenPt"), GenPt);
-                    hist.fill(HIST("Tritons/hDeltaPt"), deltaPt);
-                    hist.fill(HIST("Tritons/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
-                };
+                auto GenPt = track.mcParticle().pt();
+                auto RecoPt = track.pt();
+                auto deltaPt = GenPt - RecoPt;
+                auto deltaPhi = track.mcParticle().phi() - track.phi();
+                hist.fill(HIST("Tritons/hPtResolution"), GenPt, deltaPt);
+                hist.fill(HIST("Tritons/hGenPt"), GenPt);
+                hist.fill(HIST("Tritons/hDeltaPt"), deltaPt);
+                hist.fill(HIST("Tritons/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
+                hist.fill(HIST("Tritons/hGenPt_wideBinning"), GenPt);
+                hist.fill(HIST("Tritons/hRecoPt_wideBinning"), RecoPt);
             };
 
             /// select helium3 with high dE/dx
             //if (track.pt() > ptMin && track.tpcSignal() > dEdxMin) {
-            if (track.tpcNSigmaHe() > -9 && track.tpcNSigmaHe() < 4) {
+            // if (track.tpcNSigmaHe() > -9 && track.tpcNSigmaHe() < 4) {
+            //     fillHeliumHistos(track);
+            //     nHelium3++;
+            // select 3He with pdg code
+            // access MC truth information with mcParticle() method
+            if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size() && track.mcParticle().pdgCode() == hePdg) {
                 fillHeliumHistos(track);
                 nHelium3++;
-                // access MC truth information with mcCollision() and mcParticle() methods
-                if (track.mcParticleId() >= -1 && track.mcParticleId() <= particlesMC.size()) {
-                    auto GenPt = track.mcParticle().pt();
-                    auto RecoPt = track.pt();
-                    auto deltaPt = GenPt - RecoPt;
-                    auto deltaPhi = track.mcParticle().phi() - track.phi();
-                    hist.fill(HIST("Helium3/hPtResolution"), GenPt, deltaPt);
-                    hist.fill(HIST("Helium3/hGenPt"), GenPt);
-                    hist.fill(HIST("Helium3/hDeltaPt"), deltaPt);
-                    hist.fill(HIST("Helium3/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
-                };
+                auto GenPt = track.mcParticle().pt();
+                auto RecoPt = track.pt();
+                auto deltaPt = GenPt - RecoPt;
+                auto deltaPhi = track.mcParticle().phi() - track.phi();
+                hist.fill(HIST("Helium3/hPtResolution"), GenPt, deltaPt);
+                hist.fill(HIST("Helium3/hGenPt"), GenPt);
+                hist.fill(HIST("Helium3/hDeltaPt"), deltaPt);
+                hist.fill(HIST("Helium3/hPhiResolution"), track.mcParticle().phi(), deltaPhi);
+                hist.fill(HIST("Helium3/hGenPt_wideBinning"), GenPt);
+                hist.fill(HIST("Helium3/hRecoPt_wideBinning"), RecoPt);
             };
         }
 
-        // ========= calculate tracking efficiency for injected nuclei ===========
+        // ========= tracking efficiency ===========
         for (auto& mcpart : particlesMC) {
-            if (!isTrackInAcceptance(mcpart)) continue; /// eta filter
-            hist.fill(HIST("Nuclei/hGenPt"), mcpart.pt());
+            if (!isTrackInAcceptance(mcpart)) continue; // eta filter
+            if (mcpart.pdgCode() == dePdg) hist.fill(HIST("Deuterons/hGenPt_wideBinning"), mcpart.pt());
+            if (mcpart.pdgCode() == trPdg) hist.fill(HIST("Tritons/hGenPt_wideBinning"), mcpart.pt());
+            if (mcpart.pdgCode() == hePdg) hist.fill(HIST("Helium3/hGenPt_wideBinning"), mcpart.pt());
         }
 
         hist.fill(HIST("Events/hMultiplicity"), nTracks);
