@@ -534,10 +534,15 @@ struct NucleiRecoQA {
     PROCESS_SWITCH(NucleiRecoQA, processData, "process Data", true);
 
     /// process function MC
-    void processMC(soa::Join<CollisionTable, aod::McCollisionLabels>::iterator const& collision, 
-                   soa::Filtered<soa::Join<TrackTable, aod::McTrackLabels>> const& tracks, /// Filter: Filterbit Global track, ...
+    // Preslice<aod::McParticles> tracksPerCollision = aod::mcparticle::McCollisionId;
+    void processMC(soa::Join<CollisionTable, aod::McCollisionLabels>::iterator const& collision,
+                   soa::Filtered<soa::Join<TrackTable, aod::McTrackLabels>> const& tracks,
                    aod::BCsWithTimestamps const&, aod::McCollisions const& mcCollisions, 
-                   aod::McParticles const& particlesMC) {
+                   aod::McParticles const& particlesMC) { // there is no collision index in the McParticles table
+        // join collision table with McCollisionLabels --> we have index of McCollision that generated the reconstructed collision
+        // slice McParticles table into a subset of the bigger table that has a McCollision index that matches the label of the reconstructed collision
+        // McCollision can be reconstructed twice! This will then be counted twice --> effect?
+
         auto bc = collision.bc_as<aod::BCsWithTimestamps>();
         if (runNumber!=bc.runNumber()) {
             initMagneticFieldCCDB(bc, runNumber, ccdb, isRun3 ? ccdbPathGrpMag:ccdbPathGrp, lut, isRun3);
@@ -628,7 +633,7 @@ struct NucleiRecoQA {
                 fillHeliumHistos(track);
                 nHelium3++;
                 auto GenPt = track.mcParticle().pt();
-                auto RecoPt = track.pt();
+                auto RecoPt = track.pt()/2;
                 auto deltaPt = GenPt - RecoPt;
                 auto deltaPhi = track.mcParticle().phi() - track.phi();
                 hist.fill(HIST("Helium3/hPtResolution"), GenPt, deltaPt);
@@ -640,20 +645,24 @@ struct NucleiRecoQA {
             };
         }
 
-        // ========= tracking efficiency ===========
-        for (auto& mcpart : particlesMC) {
-            if (!isTrackInAcceptance(mcpart)) continue; // eta filter
-            if (mcpart.pdgCode() == dePdg) hist.fill(HIST("Deuterons/hGenPt_wideBinning"), mcpart.pt());
-            if (mcpart.pdgCode() == trPdg) hist.fill(HIST("Tritons/hGenPt_wideBinning"), mcpart.pt());
-            if (mcpart.pdgCode() == hePdg) hist.fill(HIST("Helium3/hGenPt_wideBinning"), mcpart.pt());
-        }
-
         hist.fill(HIST("Events/hMultiplicity"), nTracks);
         hist.fill(HIST("Events/hMultiplicityDeuterons"), nDeuterons);
         hist.fill(HIST("Events/hMultiplicityTritons"), nTritons);
         hist.fill(HIST("Events/hMultiplicityHelium3"), nHelium3);
     }
     PROCESS_SWITCH(NucleiRecoQA, processMC, "process MC", false);
+
+    void processSim(aod::McParticles const& particlesMC) {
+        // ========= tracking efficiency ===========
+        // auto mctracksPerColl = particlesMC.sliceBy(tracksPerCollision, collision.mcCollisionId());
+        for (auto& mcpart : particlesMC) { // here I have to loop over only the McParticles which belong to the reconstructed collision
+            if (!isTrackInAcceptance(mcpart)) continue; // eta filter
+            if (mcpart.pdgCode() == dePdg) hist.fill(HIST("Deuterons/hGenPt_wideBinning"), mcpart.pt());
+            if (mcpart.pdgCode() == trPdg) hist.fill(HIST("Tritons/hGenPt_wideBinning"), mcpart.pt());
+            if (mcpart.pdgCode() == hePdg) hist.fill(HIST("Helium3/hGenPt_wideBinning"), mcpart.pt());
+        }
+    }
+    PROCESS_SWITCH(NucleiRecoQA, processSim, "process true MC", false);
 };
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
