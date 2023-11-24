@@ -79,8 +79,7 @@ struct lfpropStudy {
     histos.add("hDCAzAl", "hDCAzAl", kTH1F, {axisDCAz});
   }
 
-  // void processData(soa::Filtered<aod::Collision> const& collision, soa::Filtered<Tracks> const& Tracks)
-  void processData(aod::Collision const& collision, Tracks const& Tracks)
+  void processData(soa::Filtered<aod::Collision> const& collision, Tracks const& Tracks)
   {
     histos.fill(HIST("hEventCounter"), 0.5);
     for (auto& track : Tracks) {
@@ -98,8 +97,7 @@ struct lfpropStudy {
   }
   PROCESS_SWITCH(lfpropStudy, processData, "process data", true);
 
-  // void processMC(soa::Filtered<aod::Collision> const& collision, soa::Filtered<TracksLabeled> const& Tracks, aod::McParticles const& particlesMC)
-  void processMC(aod::Collision const& collision, TracksLabeled const& Tracks, aod::McParticles const& particlesMC)
+  void processMC(soa::Filtered<aod::Collision> const& collision, TracksLabeled const& Tracks, aod::McParticles const& particlesMC)
   {
     histos.fill(HIST("hEventCounter"), 0.5);
     for (auto& track : Tracks) {
