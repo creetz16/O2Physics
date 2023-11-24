@@ -26,8 +26,8 @@ o2physics_add_dpl_workflow(lambdakzerobuilder
                     PUBLIC_LINK_LIBRARIES O2::DCAFitter O2Physics::AnalysisCore
                     COMPONENT_NAME Analysis)
 
-o2physics_add_dpl_workflow(lambdakzerolabelbuilder
-                    SOURCES lambdakzerolabelbuilder.cxx
+o2physics_add_dpl_workflow(lambdakzeromcbuilder
+                    SOURCES lambdakzeromcbuilder.cxx
                     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
                     COMPONENT_NAME Analysis)
 
@@ -41,8 +41,13 @@ o2physics_add_dpl_workflow(lambdakzeromcfinder
                     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
                     COMPONENT_NAME Analysis)
 
-o2physics_add_dpl_workflow(lambdakzerotofpid
-                    SOURCES lambdakzerotofpid.cxx
+o2physics_add_dpl_workflow(lambdakzeropid
+                    SOURCES lambdakzeropid.cxx
+                    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore O2::DetectorsBase
+                    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(lambdakzerocollisionbuilder
+                    SOURCES lambdakzerocollisionbuilder.cxx
                     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore O2::DetectorsBase
                     COMPONENT_NAME Analysis)
 
@@ -64,6 +69,16 @@ o2physics_add_dpl_workflow(cascadefinder
 o2physics_add_dpl_workflow(cascademcfinder
                     SOURCES cascademcfinder.cxx
                     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
+                    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(cascadepid
+                    SOURCES cascadepid.cxx
+                    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore O2::DetectorsBase
+                    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(cascadecollisionbuilder
+                    SOURCES cascadecollisionbuilder.cxx
+                    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore O2::DetectorsBase
                     COMPONENT_NAME Analysis)
 
 o2physics_add_dpl_workflow(hstrangecorrelationfilter

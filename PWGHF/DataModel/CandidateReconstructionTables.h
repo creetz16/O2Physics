@@ -405,6 +405,7 @@ DECLARE_SOA_COLUMN(ImpactParameter2, impactParameter2, float);                  
 DECLARE_SOA_COLUMN(ErrorImpactParameter2, errorImpactParameter2, float);           //!
 DECLARE_SOA_DYNAMIC_COLUMN(ImpactParameterNormalised2, impactParameterNormalised2, //!
                            [](float dca, float err) -> float { return dca / err; });
+DECLARE_SOA_COLUMN(NProngsContributorsPV, nProngsContributorsPV, uint8_t); //!
 // candidate properties
 DECLARE_SOA_DYNAMIC_COLUMN(Pt, pt, //!
                            [](float px, float py) -> float { return RecoDecay::pt(px, py); });
@@ -520,7 +521,7 @@ DECLARE_SOA_TABLE(HfCand2ProngBase, "AOD", "HFCAND2PBASE", //!
                   hf_cand::PxProng1, hf_cand::PyProng1, hf_cand::PzProng1,
                   hf_cand::ImpactParameter0, hf_cand::ImpactParameter1,
                   hf_cand::ErrorImpactParameter0, hf_cand::ErrorImpactParameter1,
-                  hf_track_index::Prong0Id, hf_track_index::Prong1Id,
+                  hf_track_index::Prong0Id, hf_track_index::Prong1Id, hf_cand::NProngsContributorsPV,
                   hf_track_index::HFflag,
                   /* dynamic columns */
                   hf_cand_2prong::M<hf_cand::PxProng0, hf_cand::PyProng0, hf_cand::PzProng0, hf_cand::PxProng1, hf_cand::PyProng1, hf_cand::PzProng1>,
@@ -780,7 +781,7 @@ DECLARE_SOA_TABLE(HfCand3ProngBase, "AOD", "HFCAND3PBASE", //!
                   hf_cand::PxProng2, hf_cand::PyProng2, hf_cand::PzProng2,
                   hf_cand::ImpactParameter0, hf_cand::ImpactParameter1, hf_cand::ImpactParameter2,
                   hf_cand::ErrorImpactParameter0, hf_cand::ErrorImpactParameter1, hf_cand::ErrorImpactParameter2,
-                  hf_track_index::Prong0Id, hf_track_index::Prong1Id, hf_track_index::Prong2Id,
+                  hf_track_index::Prong0Id, hf_track_index::Prong1Id, hf_track_index::Prong2Id, hf_cand::NProngsContributorsPV,
                   hf_track_index::HFflag,
                   /* dynamic columns */
                   hf_cand_3prong::M<hf_cand::PxProng0, hf_cand::PyProng0, hf_cand::PzProng0, hf_cand::PxProng1, hf_cand::PyProng1, hf_cand::PzProng1, hf_cand::PxProng2, hf_cand::PyProng2, hf_cand::PzProng2>,
@@ -1069,6 +1070,8 @@ DECLARE_SOA_COLUMN(FlagMcMatchGen, flagMcMatchGen, int8_t); // generator level
 DECLARE_SOA_COLUMN(DebugGenCharmBar, debugGenCharmBar, int8_t);
 DECLARE_SOA_COLUMN(DebugGenXi, debugGenXi, int8_t);
 DECLARE_SOA_COLUMN(DebugGenLambda, debugGenLambda, int8_t);
+DECLARE_SOA_COLUMN(OriginRec, originRec, int8_t);
+DECLARE_SOA_COLUMN(OriginGen, originGen, int8_t);
 
 // mapping of decay types
 enum DecayType { DecayToXiPi = 0,
@@ -1111,11 +1114,12 @@ DECLARE_SOA_TABLE(HfCandToXiPi, "AOD", "HFCANDTOXIPI",
 // table with results of reconstruction level MC matching
 DECLARE_SOA_TABLE(HfToXiPiMCRec, "AOD", "HFTOXIPIMCREC", //!
                   hf_cand_toxipi::FlagMcMatchRec,
-                  hf_cand_toxipi::DebugMcRec);
+                  hf_cand_toxipi::DebugMcRec,
+                  hf_cand_toxipi::OriginRec);
 
 // table with results of generator level MC matching
 DECLARE_SOA_TABLE(HfToXiPiMCGen, "AOD", "HFTOXIPIMCGEN", //!
-                  hf_cand_toxipi::FlagMcMatchGen, hf_cand_toxipi::DebugGenCharmBar, hf_cand_toxipi::DebugGenXi, hf_cand_toxipi::DebugGenLambda);
+                  hf_cand_toxipi::FlagMcMatchGen, hf_cand_toxipi::DebugGenCharmBar, hf_cand_toxipi::DebugGenXi, hf_cand_toxipi::DebugGenLambda, hf_cand_toxipi::OriginGen);
 
 // specific chic candidate properties
 namespace hf_cand_chic
