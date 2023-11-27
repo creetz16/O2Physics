@@ -31,7 +31,6 @@ using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
 
-// allows for candidate-by-candidate comparison using Cascade to []CascData link table
 using TracksLabeled = soa::Join<aod::StoredTracks, aod::StoredTracksCov, aod::TracksDCA, aod::TracksDCACov, aod::TracksExtra, aod::McTrackLabels>;
 using Tracks = soa::Join<aod::StoredTracks, aod::StoredTracksCov, aod::TracksDCA, aod::TracksDCACov, aod::TracksExtra>;
 
@@ -47,20 +46,41 @@ struct lfpropStudy {
   
   HistogramRegistry histos{"Histos", {}, OutputObjHandlingPolicy::AnalysisObject};
 
-  Filter collisionFilter = (aod::evsel::sel8 == true);
-  Filter etaFilter = (nabs(aod::track::eta) < 0.8f);
-  Filter ptFilter = (aod::track::pt > d_pTMin);
+  // Filter collisionFilter = (aod::evsel::sel8 == true);
+  // Filter etaFilter = (nabs(aod::track::eta) < 0.8f);
+  // Filter ptFilter = (aod::track::pt > d_pTMin);
 
   void init(InitContext const&)
   {
     histos.add("hEventCounter", "hEventCounter", kTH1F, {{1, 0.0f, 1.0f}});
 
-    histos.add("hDCAxy", "hDCAxy", kTH1F, {axisDCAxy});
-    histos.add("hDCAz", "hDCAz", kTH1F, {axisDCAz});
-    histos.add("hPx", "hPx", kTH1F, {axisMom});
-    histos.add("hPy", "hPy", kTH1F, {axisMom});
-    histos.add("hPz", "hPz", kTH1F, {axisMom});
+    // momentum
+    histos.add("hPxEl", "hPxEl", kTH1F, {axisMom});
+    histos.add("hPyEl", "hPyEl", kTH1F, {axisMom});
+    histos.add("hPzEl", "hPzEl", kTH1F, {axisMom});
+    histos.add("hPxPi", "hPxPi", kTH1F, {axisMom});
+    histos.add("hPyPi", "hPyPi", kTH1F, {axisMom});
+    histos.add("hPzPi", "hPzPi", kTH1F, {axisMom});
+    histos.add("hPxKa", "hPxKa", kTH1F, {axisMom});
+    histos.add("hPyKa", "hPyKa", kTH1F, {axisMom});
+    histos.add("hPzKa", "hPzKa", kTH1F, {axisMom});
+    histos.add("hPxPr", "hPxPr", kTH1F, {axisMom});
+    histos.add("hPyPr", "hPyPr", kTH1F, {axisMom});
+    histos.add("hPzPr", "hPzPr", kTH1F, {axisMom});
+    histos.add("hPxDe", "hPxDe", kTH1F, {axisMom});
+    histos.add("hPyDe", "hPyDe", kTH1F, {axisMom});
+    histos.add("hPzDe", "hPzDe", kTH1F, {axisMom});
+    histos.add("hPxTr", "hPxTr", kTH1F, {axisMom});
+    histos.add("hPyTr", "hPyTr", kTH1F, {axisMom});
+    histos.add("hPzTr", "hPzTr", kTH1F, {axisMom});
+    histos.add("hPxHe", "hPxHe", kTH1F, {axisMom});
+    histos.add("hPyHe", "hPyHe", kTH1F, {axisMom});
+    histos.add("hPzHe", "hPzHe", kTH1F, {axisMom});
+    histos.add("hPxAl", "hPxAl", kTH1F, {axisMom});
+    histos.add("hPyAl", "hPyAl", kTH1F, {axisMom});
+    histos.add("hPzAl", "hPzAl", kTH1F, {axisMom});
 
+    // DCA
     histos.add("hDCAxyEl", "hDCAxyEl", kTH1F, {axisDCAxy});
     histos.add("hDCAzEl", "hDCAzEl", kTH1F, {axisDCAz});
     histos.add("hDCAxyPi", "hDCAxyPi", kTH1F, {axisDCAxy});
@@ -79,7 +99,7 @@ struct lfpropStudy {
     histos.add("hDCAzAl", "hDCAzAl", kTH1F, {axisDCAz});
   }
 
-  void processData(soa::Filtered<aod::Collision> const& collision, Tracks const& Tracks)
+  void processData(aod::Collision const& collision, Tracks const& Tracks)
   {
     histos.fill(HIST("hEventCounter"), 0.5);
     for (auto& track : Tracks) {
@@ -88,16 +108,60 @@ struct lfpropStudy {
       if (track.hasITS()) continue; // only look at tracks which start outside the ITS
       if (track.tpcNClsCrossedRows() < d_TPCrowsMin || track.tpcCrossedRowsOverFindableCls() < d_TPCrowsOverFindMin) continue;
 
-      histos.fill(HIST("hPx"), track.px());
-      histos.fill(HIST("hPy"), track.py());
-      histos.fill(HIST("hPz"), track.pz());
-      histos.fill(HIST("hDCAxy"), track.dcaXY());
-      histos.fill(HIST("hDCz"), track.dcaZ());
+      if (track.pidForTracking() == o2::track::PID::Electron) {
+        histos.fill(HIST("hPxEl"), track.px());
+        histos.fill(HIST("hPyEl"), track.py());
+        histos.fill(HIST("hPzEl"), track.pz());
+        histos.fill(HIST("hDCAxyEl"), track.dcaXY());
+        histos.fill(HIST("hDCAzEl"), track.dcaZ());
+      } else if (track.pidForTracking() == o2::track::PID::Pion) {
+        histos.fill(HIST("hPxPi"), track.px());
+        histos.fill(HIST("hPyPi"), track.py());
+        histos.fill(HIST("hPzPi"), track.pz());
+        histos.fill(HIST("hDCAxyPi"), track.dcaXY());
+        histos.fill(HIST("hDCAzPi"), track.dcaZ());
+      } else if (track.pidForTracking() == o2::track::PID::Kaon) {
+        histos.fill(HIST("hPxKa"), track.px());
+        histos.fill(HIST("hPyKa"), track.py());
+        histos.fill(HIST("hPzKa"), track.pz());
+        histos.fill(HIST("hDCAxyKa"), track.dcaXY());
+        histos.fill(HIST("hDCAzKa"), track.dcaZ());
+      } else if (track.pidForTracking() == o2::track::PID::Proton) {
+        histos.fill(HIST("hPxPr"), track.px());
+        histos.fill(HIST("hPyPr"), track.py());
+        histos.fill(HIST("hPzPr"), track.pz());
+        histos.fill(HIST("hDCAxyPr"), track.dcaXY());
+        histos.fill(HIST("hDCAzPr"), track.dcaZ());
+      } else if (track.pidForTracking() == o2::track::PID::Deuteron) {
+        histos.fill(HIST("hPxDe"), track.px());
+        histos.fill(HIST("hPyDe"), track.py());
+        histos.fill(HIST("hPzDe"), track.pz());
+        histos.fill(HIST("hDCAxyDe"), track.dcaXY());
+        histos.fill(HIST("hDCAzDe"), track.dcaZ());
+      } else if (track.pidForTracking() == o2::track::PID::Triton) {
+        histos.fill(HIST("hPxTr"), track.px());
+        histos.fill(HIST("hPyTr"), track.py());
+        histos.fill(HIST("hPzTr"), track.pz());
+        histos.fill(HIST("hDCAxyTr"), track.dcaXY());
+        histos.fill(HIST("hDCAzTr"), track.dcaZ());
+      } else if (track.pidForTracking() == o2::track::PID::Helium3) {
+        histos.fill(HIST("hPxHe"), track.px());
+        histos.fill(HIST("hPyHe"), track.py());
+        histos.fill(HIST("hPzHe"), track.pz());
+        histos.fill(HIST("hDCAxyHe"), track.dcaXY());
+        histos.fill(HIST("hDCAzHe"), track.dcaZ());
+      } else if (track.pidForTracking() == o2::track::PID::Alpha) {
+        histos.fill(HIST("hPxAl"), track.px());
+        histos.fill(HIST("hPyAl"), track.py());
+        histos.fill(HIST("hPzAl"), track.pz());
+        histos.fill(HIST("hDCAxyAl"), track.dcaXY());
+        histos.fill(HIST("hDCAzAl"), track.dcaZ());
+      }
     }
   }
   PROCESS_SWITCH(lfpropStudy, processData, "process data", true);
 
-  void processMC(soa::Filtered<aod::Collision> const& collision, TracksLabeled const& Tracks, aod::McParticles const& particlesMC)
+  void processMC(aod::Collision const& collision, TracksLabeled const& Tracks, aod::McParticles const& particlesMC)
   {
     histos.fill(HIST("hEventCounter"), 0.5);
     for (auto& track : Tracks) {
