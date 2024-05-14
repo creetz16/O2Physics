@@ -538,8 +538,8 @@ struct qaLamMomResolution {
             }
           }
         } // end Anti-Lambda
-      } // end MC
-    } // end V0 loop
+      }   // end MC
+    }     // end V0 loop
   }
   PROCESS_SWITCH(qaLamMomResolution, processMC, "Process MC", true);
 };
