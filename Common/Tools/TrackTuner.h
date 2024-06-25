@@ -43,6 +43,7 @@
 #include "ReconstructionDataFormats/DCA.h"
 #include "ReconstructionDataFormats/Track.h"
 #include <TGraphErrors.h>
+#include <TGraph2D.h>
 
 namespace o2::aod
 {
@@ -64,7 +65,8 @@ struct TrackTuner {
   bool updateCurvature = false;
   bool updateCurvatureIU = false; // To update the track parameter Q/Pt in trackIU table, particularly used for V0 mass width dependence on Q/Pt
   bool updatePulls = false;
-  bool isInputFileFromCCDB = false;   // query input file from CCDB or local folder
+  bool isInputFileFromCCDB = false;   // query input file from CCDB or local folder for DCA smearing
+  bool isInputFileQoverPtFromCCDB = false;   // query input file from CCDB or local folder for Q/pT smearing
   std::string pathInputFile = "";     // Path to file containing DCAxy, DCAz graphs from data and MC
   std::string nameInputFile = "";     // Common Name of different files containing graphs, found in the above paths
   std::string pathFileQoverPt = "";   // Path to file containing D0 sigma graphs from data and MC
@@ -89,8 +91,8 @@ struct TrackTuner {
   std::unique_ptr<TGraphErrors> grDcaZMeanVsPtPionMC;
   std::unique_ptr<TGraphErrors> grDcaZMeanVsPtPionData;
 
-  std::unique_ptr<TGraphErrors> grOneOverPtPionMC;   // MC
-  std::unique_ptr<TGraphErrors> grOneOverPtPionData; // Data
+  std::unique_ptr<TGraph2D> grDeltaOneOverPt;       // Correction map
+  // std::unique_ptr<TGraphErrors> grOneOverPtPionData; // Data
 
   std::unique_ptr<TGraphErrors> grDcaXYPullVsPtPionMC;
   std::unique_ptr<TGraphErrors> grDcaXYPullVsPtPionData;
@@ -140,6 +142,7 @@ struct TrackTuner {
                           UpdateCurvatureIU,
                           UpdatePulls,
                           IsInputFileFromCCDB,
+                          IsInputFileQoverPtFromCCDB,
                           PathInputFile,
                           NameInputFile,
                           PathFileQoverPt,
@@ -156,6 +159,7 @@ struct TrackTuner {
       std::make_pair(UpdateCurvatureIU, "updateCurvatureIU"),
       std::make_pair(UpdatePulls, "updatePulls"),
       std::make_pair(IsInputFileFromCCDB, "isInputFileFromCCDB"),
+      std::make_pair(IsInputFileQoverPtFromCCDB, "isInputFileQoverPtFromCCDB"),
       std::make_pair(PathInputFile, "pathInputFile"),
       std::make_pair(PathFileQoverPt, "pathFileQoverPt"),
       std::make_pair(NameInputFile, "nameInputFile"),
@@ -173,6 +177,7 @@ struct TrackTuner {
     LOG(info) << "[TrackTuner]     updateCurvatureIU = " << updateCurvatureIU;
     LOG(info) << "[TrackTuner]     updatePulls = " << updatePulls;
     LOG(info) << "[TrackTuner]     isInputFileFromCCDB = " << isInputFileFromCCDB;
+    LOG(info) << "[TrackTuner]     isInputFileQoverPtFromCCDB = " << isInputFileQoverPtFromCCDB;
     LOG(info) << "[TrackTuner]     pathInputFile = " << pathInputFile;
     LOG(info) << "[TrackTuner]     nameInputFile = " << nameInputFile;
     LOG(info) << "[TrackTuner]     pathFileQoverPt = " << pathFileQoverPt;
@@ -265,6 +270,10 @@ struct TrackTuner {
     setBoolFromString(isInputFileFromCCDB, getValueString(IsInputFileFromCCDB));
     LOG(info) << "[TrackTuner]     isInputFileFromCCDB = " << isInputFileFromCCDB;
     outputString += ", isInputFileFromCCDB=" + std::to_string(isInputFileFromCCDB);
+    // Configure isInputFileQoverPtFromCCDB
+    setBoolFromString(isInputFileQoverPtFromCCDB, getValueString(isInputFileQoverPtFromCCDB));
+    LOG(info) << "[TrackTuner]     isInputFileQoverPtFromCCDB = " << isInputFileQoverPtFromCCDB;
+    outputString += ", isInputFileQoverPtFromCCDB=" + std::to_string(isInputFileQoverPtFromCCDB);
     // Configure pathInputFile
     pathInputFile = getValueString(PathInputFile);
     outputString += ", pathInputFile=" + pathInputFile;
@@ -306,7 +315,7 @@ struct TrackTuner {
     std::string fullNameInputFile = "";
     std::string fullNameFileQoverPt = "";
 
-    if (isInputFileFromCCDB) {
+    if (isInputFileFromCCDB || isInputFileQoverPtFromCCDB) {
       /// use input correction file from CCDB
 
       // properly init the ccdb
@@ -317,27 +326,39 @@ struct TrackTuner {
       if (!ccdbApi.retrieveBlob(pathInputFile.data(), tmpDir, metadata, 0, false, nameInputFile.data())) {
         LOG(fatal) << "[TrackTuner] input file for DCA corrections not found on CCDB, please check the pathInputFile and nameInputFile!";
       }
+      // point to the file in the tmp local folder
+      fullNameInputFile = tmpDir + std::string("/") + nameInputFile;
+    } else {
+      /// use input correction file from local filesystem
+      fullNameInputFile = pathInputFile + std::string("/") + nameInputFile;
+    }
+
+    if (isInputFileQoverPtFromCCDB) {
+      // use input correction file from CCDB
+
+      // properly init the ccdb
+      std::string tmpDir = ".";
+      ccdbApi.init("http://alice-ccdb.cern.ch");
 
       // get the Q/Pt correction file from CCDB
       if (!ccdbApi.retrieveBlob(pathFileQoverPt.data(), tmpDir, metadata, 0, false, nameFileQoverPt.data())) {
         LOG(fatal) << "[TrackTuner] input file for Q/Pt corrections not found on CCDB, please check the pathFileQoverPt and nameFileQoverPt!";
       }
       // point to the file in the tmp local folder
-      fullNameInputFile = tmpDir + std::string("/") + nameInputFile;
       fullNameFileQoverPt = tmpDir + std::string("/") + nameFileQoverPt;
     } else {
-      /// use input correction file from local filesystem
-      fullNameInputFile = pathInputFile + std::string("/") + nameInputFile;
+      // use input correction file from local filesystem
       fullNameFileQoverPt = pathFileQoverPt + std::string("/") + nameFileQoverPt;
     }
+
     /// open the input correction file
     std::unique_ptr<TFile> inputFile(TFile::Open(fullNameInputFile.c_str(), "READ"));
     if (!inputFile.get()) {
-      LOG(fatal) << "Something wrong with the input file" << fullNameInputFile << " for dca correction. Fix it!";
+      LOG(fatal) << "Something wrong with the input file " << fullNameInputFile << " for dca correction. Fix it!";
     }
     std::unique_ptr<TFile> inputFileQoverPt(TFile::Open(fullNameFileQoverPt.c_str(), "READ"));
     if (!inputFileQoverPt.get() && (updateCurvature || updateCurvatureIU)) {
-      LOG(fatal) << "Something wrong with the Q/Pt input file" << fullNameFileQoverPt << " for Q/Pt correction. Fix it!";
+      LOG(fatal) << "Something wrong with the Q/Pt input file " << fullNameFileQoverPt << " for Q/Pt correction. Fix it!";
     }
 
     // choose wheter to use corrections w/ PV refit or w/o it, and retrieve the proper TDirectory
@@ -347,7 +368,7 @@ struct TrackTuner {
     }
     TDirectory* td = dynamic_cast<TDirectory*>(inputFile->Get(dir.c_str()));
     if (!td) {
-      LOG(fatal) << "TDirectory " << td << " not found in input file" << inputFile->GetName() << ". Fix it!";
+      LOG(fatal) << "TDirectory " << td << " not found in input file " << inputFile->GetName() << ". Fix it!";
     }
 
     std::string grDcaXYResNameMC = "resCurrentDcaXY";
@@ -388,8 +409,8 @@ struct TrackTuner {
     std::string grOneOverPtPionNameData = "sigmaVsPtData";
 
     if (updateCurvature || updateCurvatureIU) {
-      grOneOverPtPionMC.reset(dynamic_cast<TGraphErrors*>(inputFileQoverPt->Get(grOneOverPtPionNameMC.c_str())));
-      grOneOverPtPionData.reset(dynamic_cast<TGraphErrors*>(inputFileQoverPt->Get(grOneOverPtPionNameData.c_str())));
+      grDeltaOneOverPt.reset(dynamic_cast<TGraph2D*>(inputFileQoverPt->Get("TGraph2D_deltaQptCorrection")));
+      // grOneOverPtPionData.reset(dynamic_cast<TGraphErrors*>(inputFileQoverPt->Get(grOneOverPtPionNameData.c_str())));
     }
   } // getDcaGraphs() ends here
 
@@ -422,14 +443,14 @@ struct TrackTuner {
     if (updateCurvature || updateCurvatureIU) {
       if ((qOverPtMC < 0) || (qOverPtData < 0)) {
         if (debugInfo) {
-          LOG(info) << "### q/pt smearing: qOverPtMC=" << qOverPtMC << ", qOverPtData=" << qOverPtData << ". One of them is negative. Retrieving then values from graphs from input .root file";
+          LOG(info) << "### q/pt smearing: qOverPtMC=" << qOverPtMC << ", qOverPtData=" << qOverPtData << ". One of them is negative. Retrieving then values from graph from input .root file";
         }
         /// check that input graphs for q/pt smearing are correctly retrieved
-        if (!grOneOverPtPionData.get() || !grOneOverPtPionMC.get()) {
-          LOG(fatal) << "### q/pt smearing: input graphs not correctly retrieved. Aborting.";
+        if (!grDeltaOneOverPt.get()) {
+          LOG(fatal) << "### q/pt smearing: input graph not correctly retrieved. Aborting.";
         }
-        qOverPtMC = std::max(0.0, evalGraph(ptMC, grOneOverPtPionMC.get()));
-        qOverPtData = std::max(0.0, evalGraph(ptMC, grOneOverPtPionData.get()));
+        // qOverPtMC = std::max(0.0, evalGraph(ptMC, grOneOverPtPionMC.get()));
+        // qOverPtData = std::max(0.0, evalGraph(ptMC, grOneOverPtPionData.get()));
       } // qOverPtMC, qOverPtData block ends here
     }   // updateCurvature, updateCurvatureIU block ends here
 
@@ -496,48 +517,50 @@ struct TrackTuner {
 
     if (updateCurvatureIU) {
       // double dpt1o =pt1o-pt1mc;
-      deltaQpt = trackParQPtMCRec - trackParQPtMC;
+      // deltaQpt = trackParQPtMCRec - trackParQPtMC;
       // double dpt1n =dpt1o *(spt1o >0. ? (spt1n /spt1o ) : 1.);
-      deltaQptTuned = deltaQpt * (qOverPtMC > 0. ? (qOverPtData / qOverPtMC) : 1.);
+      // deltaQptTuned = deltaQpt * (qOverPtMC > 0. ? (qOverPtData / qOverPtMC) : 1.);
+      deltaQptTuned = std::max(0.0, evalGraph2D(trackParCov.getTgl(), trackParCov.getPhi(), grDeltaOneOverPt.get()));
       // double pt1n  = pt1mc+dpt1n;
-      trackParQPtTuned = trackParQPtMC + deltaQptTuned;
+      trackParQPtTuned = trackParQPtMCRec + deltaQptTuned;
       trackParCov.setQ2Pt(trackParQPtTuned);
 
       // updating track cov matrix elements for 1/Pt at innermost update point
       //       if(sd0rpo>0. && spt1o>0.)covar[10]*=(sd0rpn/sd0rpo)*(spt1n/spt1o);//ypt
-      sigma1PtY = trackParCov.getSigma1PtY();
-      if (dcaXYResMC > 0. && qOverPtMC > 0.) {
-        sigma1PtY *= ((dcaXYResData / dcaXYResMC) * (qOverPtData / qOverPtMC));
-        trackParCov.setCov(sigma1PtY, 10);
-      }
+      // commented from here!!
+      // sigma1PtY = trackParCov.getSigma1PtY();
+      // if (dcaXYResMC > 0. && qOverPtMC > 0.) {
+      //   sigma1PtY *= ((dcaXYResData / dcaXYResMC) * (qOverPtData / qOverPtMC));
+      //   trackParCov.setCov(sigma1PtY, 10);
+      // }
 
-      //       if(sd0zo>0. && spt1o>0.) covar[11]*=(sd0zn/sd0zo)*(spt1n/spt1o);//zpt
-      sigma1PtZ = trackParCov.getSigma1PtZ();
-      if (dcaZResMC > 0. && qOverPtMC > 0.) {
-        sigma1PtZ *= ((dcaZResData / dcaZResMC) * (qOverPtData / qOverPtMC));
-        trackParCov.setCov(sigma1PtZ, 11);
-      }
+      // //       if(sd0zo>0. && spt1o>0.) covar[11]*=(sd0zn/sd0zo)*(spt1n/spt1o);//zpt
+      // sigma1PtZ = trackParCov.getSigma1PtZ();
+      // if (dcaZResMC > 0. && qOverPtMC > 0.) {
+      //   sigma1PtZ *= ((dcaZResData / dcaZResMC) * (qOverPtData / qOverPtMC));
+      //   trackParCov.setCov(sigma1PtZ, 11);
+      // }
 
-      //       if(spt1o>0.)             covar[12]*=(spt1n/spt1o);//sinPhipt
-      sigma1PtSnp = trackParCov.getSigma1PtSnp();
-      if (qOverPtMC > 0.) {
-        sigma1PtSnp *= (qOverPtData / qOverPtMC);
-        trackParCov.setCov(sigma1PtSnp, 12);
-      }
+      // //       if(spt1o>0.)             covar[12]*=(spt1n/spt1o);//sinPhipt
+      // sigma1PtSnp = trackParCov.getSigma1PtSnp();
+      // if (qOverPtMC > 0.) {
+      //   sigma1PtSnp *= (qOverPtData / qOverPtMC);
+      //   trackParCov.setCov(sigma1PtSnp, 12);
+      // }
 
-      //       if(spt1o>0.)             covar[13]*=(spt1n/spt1o);//tanTpt
-      sigma1PtTgl = trackParCov.getSigma1PtTgl();
-      if (qOverPtMC > 0.) {
-        sigma1PtTgl *= (qOverPtData / qOverPtMC);
-        trackParCov.setCov(sigma1PtTgl, 13);
-      }
+      // //       if(spt1o>0.)             covar[13]*=(spt1n/spt1o);//tanTpt
+      // sigma1PtTgl = trackParCov.getSigma1PtTgl();
+      // if (qOverPtMC > 0.) {
+      //   sigma1PtTgl *= (qOverPtData / qOverPtMC);
+      //   trackParCov.setCov(sigma1PtTgl, 13);
+      // }
 
-      //       if(spt1o>0.)             covar[14]*=(spt1n/spt1o)*(spt1n/spt1o);//ptpt
-      sigma1Pt2 = trackParCov.getSigma1Pt2();
-      if (qOverPtMC > 0.) {
-        sigma1Pt2 *= (qOverPtData / qOverPtMC);
-        trackParCov.setCov(sigma1Pt2, 14);
-      }
+      // //       if(spt1o>0.)             covar[14]*=(spt1n/spt1o)*(spt1n/spt1o);//ptpt
+      // sigma1Pt2 = trackParCov.getSigma1Pt2();
+      // if (qOverPtMC > 0.) {
+      //   sigma1Pt2 *= (qOverPtData / qOverPtMC);
+      //   trackParCov.setCov(sigma1Pt2, 14);
+      // }
     } // updateCurvatureIU block ends here
     // propagate to DCA with respect to the Production point
     // if (!updateCurvatureIU) {
@@ -839,6 +862,49 @@ struct TrackTuner {
     if (x < xMin)
       return graph->Eval(xMin);
     return graph->Eval(x);
+  }
+
+  double evalGraph2D(double tgl, double phi, TGraph2D* graph) const
+  { // x: tgl, y: sec, z: deltaQpt
+
+    if (!graph) {
+      printf("\tevalGraph2D fails !\n");
+      return 0.;
+    }
+    // int nPoints = graph->GetN();
+    // double tglMin = graph->GetX()[0];
+    // double tglMax = graph->GetX()[nPoints - 1];
+    // double secMin = graph->GetY()[0];
+    // double secMax = graph->GetY()[nPoints - 1];
+
+    double sec = 9 * phi/TMath::Pi();
+
+    // if (tgl > tglMax) {
+    //   if (sec > secMax) {
+    //     return graph->Interpolate(tglMax, secMax);
+    //   } else if (sec < secMin) {
+    //     return graph->Interpolate(tglMax, secMin);
+    //   } else {
+    //     return graph->Interpolate(tglMax, sec);
+    //   }
+    // } else if (tgl < tglMin) {
+    //   if (sec > secMax) {
+    //     return graph->Interpolate(tglMin, secMax);
+    //   } else if (sec < secMin) {
+    //     return graph->Interpolate(tglMin, secMin);
+    //   } else {
+    //     return graph->Interpolate(tglMin, sec);
+    //   }
+    // } else {
+    //   if (sec > secMax) {
+    //     return graph->Interpolate(tgl, secMax);
+    //   } else if (sec < secMin) {
+    //     return graph->Interpolate(tgl, secMin);
+    //   } else {
+    //     return graph->Interpolate(tgl, sec);
+    //   }
+    // }
+    return graph->Interpolate(tgl, sec);
   }
 };
 
