@@ -65,6 +65,7 @@ struct HfTaskSingleMuonSource {
 
   Configurable<int> mcMaskSelection{"mcMaskSelection", 0, "McMask for correct match, valid values are 0 and 128"};
   Configurable<int> trackType{"trackType", 0, "Muon track type, validated values are 0, 1, 2, 3 and 4"};
+  Configurable<int> charge{"charge", -1, "Muon track charge, validated values are 0, 1 and -1, 0 represents both 1 and -1"};
 
   double pDcaMax = 594.0; // p*DCA maximum value for large Rabs
   double rAbsMin = 26.5;  // R at absorber end minimum value
@@ -87,6 +88,7 @@ struct HfTaskSingleMuonSource {
       "NonpromptCharmMu",
       "PromptCharmMu",
       "LightDecayMu",
+      "QuarkoniumDecayMu",
       "SecondaryMu",
       "Hadron",
       "Unidentified"};
@@ -218,6 +220,12 @@ struct HfTaskSingleMuonSource {
     return (isMuon(mask) && TESTBIT(mask, HasLightParent) && (!TESTBIT(mask, IsSecondary)) && (!TESTBIT(mask, HasQuarkoniumParent)));
   }
 
+  // this muon comes from quarkonium decay
+  bool isQuarkoniumDecayMu(const uint8_t& mask)
+  {
+    return (isMuon(mask) && TESTBIT(mask, HasQuarkoniumParent) && (!TESTBIT(mask, HasBeautyParent)) && (!TESTBIT(mask, HasCharmParent)));
+  }
+
   // this muon comes from transport
   bool isSecondaryMu(const uint8_t& mask)
   {
@@ -268,6 +276,10 @@ struct HfTaskSingleMuonSource {
         registry.fill(HIST("h2LightDecayMuPtDCA"), pt, dca);
         registry.fill(HIST("h2LightDecayMuPtChi2"), pt, chi2);
         registry.fill(HIST("h2LightDecayMuPtDeltaPt"), pt, deltaPt);
+      } else if (isQuarkoniumDecayMu(mask)) {
+        registry.fill(HIST("h2QuarkoniumDecayMuPtDCA"), pt, dca);
+        registry.fill(HIST("h2QuarkoniumDecayMuPtChi2"), pt, chi2);
+        registry.fill(HIST("h2QuarkoniumDecayMuPtDeltaPt"), pt, deltaPt);
       } else if (isSecondaryMu(mask)) {
         registry.fill(HIST("h2SecondaryMuPtDCA"), pt, dca);
         registry.fill(HIST("h2SecondaryMuPtChi2"), pt, chi2);
@@ -290,6 +302,8 @@ struct HfTaskSingleMuonSource {
         registry.fill(HIST("h1PromptCharmMuPt"), pt);
       } else if (isLightDecayMu(mask)) {
         registry.fill(HIST("h1LightDecayMuPt"), pt);
+      } else if (isQuarkoniumDecayMu(mask)) {
+        registry.fill(HIST("h1QuarkoniumDecayMuPt"), pt);
       } else if (isSecondaryMu(mask)) {
         registry.fill(HIST("h1SecondaryMuPt"), pt);
       } else if (isHadron(mask)) {
@@ -329,6 +343,9 @@ struct HfTaskSingleMuonSource {
         continue;
       }
       if ((muon.chi2() >= 1e6) || (muon.chi2() < 0)) {
+        continue;
+      }
+      if (charge != 0 && muon.sign() != charge) {
         continue;
       }
       fillHistograms(muon);

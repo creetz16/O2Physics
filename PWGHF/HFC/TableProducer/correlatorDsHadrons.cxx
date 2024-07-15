@@ -52,6 +52,7 @@ struct HfCorrelatorDsHadronsSelCollision {
   Produces<aod::DmesonSelection> collisionsWithSelDs;
 
   Configurable<bool> useSel8{"useSel8", true, "Flag for applying sel8 for collision selection"};
+  Configurable<bool> selNoSameBunchPileUpColl{"selNoSameBunchPileUpColl", true, "Flag for rejecting the collisions associated with the same bunch crossing"};
   Configurable<bool> doSelDsCollision{"doSelDsCollision", true, "Select collisions with at least one Ds"};
   Configurable<int> selectionFlagDs{"selectionFlagDs", 7, "Selection Flag for Ds"};
   Configurable<float> yCandMax{"yCandMax", 0.8, "max. cand. rapidity"};
@@ -71,24 +72,28 @@ struct HfCorrelatorDsHadronsSelCollision {
   void processDsSelCollisionsData(SelCollisions::iterator const& collision,
                                   CandDsData const& candidates)
   {
-    bool isDsFound = false;
-    bool isSel8 = false;
+    bool isSelColl = true;
+    bool isDsFound = true;
+    bool isSel8 = true;
+    bool isNosameBunchPileUp = true;
     if (doSelDsCollision) {
       for (const auto& candidate : candidates) {
         if (std::abs(hfHelper.yDs(candidate)) > yCandMax || candidate.pt() < ptCandMin) {
+          isDsFound = false;
           continue;
         }
         isDsFound = true;
         break;
       }
-    } else {
-      isDsFound = true;
     }
     if (useSel8) {
       isSel8 = collision.sel8();
-      isDsFound = isDsFound && isSel8;
     }
-    collisionsWithSelDs(isDsFound);
+    if (selNoSameBunchPileUpColl) {
+      isNosameBunchPileUp = static_cast<bool>(collision.selection_bit(o2::aod::evsel::kNoSameBunchPileup));
+    }
+    isSelColl = isDsFound && isSel8 && isNosameBunchPileUp;
+    collisionsWithSelDs(isSelColl);
   }
   PROCESS_SWITCH(HfCorrelatorDsHadronsSelCollision, processDsSelCollisionsData, "Process Ds Collision Selection Data", true);
 
@@ -96,24 +101,28 @@ struct HfCorrelatorDsHadronsSelCollision {
   void processDsSelCollisionsMcRec(SelCollisions::iterator const& collision,
                                    CandDsMcReco const& candidates)
   {
-    bool isDsFound = false;
-    bool isSel8 = false;
+    bool isSelColl = true;
+    bool isDsFound = true;
+    bool isSel8 = true;
+    bool isNosameBunchPileUp = true;
     if (doSelDsCollision) {
       for (const auto& candidate : candidates) {
         if (std::abs(hfHelper.yDs(candidate)) > yCandMax || candidate.pt() < ptCandMin) {
+          isDsFound = false;
           continue;
         }
         isDsFound = true;
         break;
       }
-    } else {
-      isDsFound = true;
     }
     if (useSel8) {
       isSel8 = collision.sel8();
-      isDsFound = isDsFound && isSel8;
     }
-    collisionsWithSelDs(isDsFound);
+    if (selNoSameBunchPileUpColl) {
+      isNosameBunchPileUp = static_cast<bool>(collision.selection_bit(o2::aod::evsel::kNoSameBunchPileup));
+    }
+    isSelColl = isDsFound && isSel8 && isNosameBunchPileUp;
+    collisionsWithSelDs(isSelColl);
   }
   PROCESS_SWITCH(HfCorrelatorDsHadronsSelCollision, processDsSelCollisionsMcRec, "Process Ds Collision Selection MCRec", false);
 
@@ -121,23 +130,25 @@ struct HfCorrelatorDsHadronsSelCollision {
   void processDsSelCollisionsMcGen(aod::McCollision const&,
                                    CandDsMcGen const& mcParticles)
   {
-    bool isDsFound = false;
+    bool isSelColl = true;
+    bool isDsFound = true;
     if (doSelDsCollision) {
       for (const auto& particle : mcParticles) {
         if (std::abs(particle.pdgCode()) != Pdg::kDS) {
+          isDsFound = false;
           continue;
         }
         double yD = RecoDecay::y(particle.pVector(), MassDS);
         if (std::abs(yD) > yCandMax || particle.pt() < ptCandMin) {
+          isDsFound = false;
           continue;
         }
         isDsFound = true;
         break;
       }
-    } else {
-      isDsFound = true;
     }
-    collisionsWithSelDs(isDsFound);
+    isSelColl = isDsFound;
+    collisionsWithSelDs(isSelColl);
   }
   PROCESS_SWITCH(HfCorrelatorDsHadronsSelCollision, processDsSelCollisionsMcGen, "Process Ds Collision Selection MCGen", false);
 };
@@ -597,9 +608,25 @@ struct HfCorrelatorDsHadrons {
         // prompt and non-prompt division
         isDsPrompt = particle.originMcGen() == RecoDecay::OriginType::Prompt;
         isDecayChan = particle.flagMcDecayChanGen() == decayChannel;
+        std::vector<int> listDaughters{};
+        std::array<int, 3> arrDaughDsPDG = {+kKPlus, -kKPlus, kPiPlus};
+        std::array<int, 3> prongsId;
+        listDaughters.clear();
+        RecoDecay::getDaughters(particle, &listDaughters, arrDaughDsPDG, 2);
+        int counterDaughters = 0;
+        if (listDaughters.size() == 3) {
+          for (const auto& dauIdx : listDaughters) {
+            auto daughI = mcParticles.rawIteratorAt(dauIdx - mcParticles.offset());
+            counterDaughters += 1;
+            prongsId[counterDaughters - 1] = daughI.globalIndex();
+          }
+        }
         // Ds Hadron correlation dedicated section
         for (const auto& particleAssoc : mcParticles) {
-          if (std::abs(particleAssoc.eta()) > etaTrackMax || particleAssoc.pt() < ptTrackMin || particleAssoc.pt() < ptTrackMax) {
+          if (std::abs(particleAssoc.eta()) > etaTrackMax || particleAssoc.pt() < ptTrackMin || particleAssoc.pt() > ptTrackMax) {
+            continue;
+          }
+          if (particleAssoc.globalIndex() == prongsId[0] || particleAssoc.globalIndex() == prongsId[1] || particleAssoc.globalIndex() == prongsId[2]) {
             continue;
           }
           if ((std::abs(particleAssoc.pdgCode()) != kElectron) && (std::abs(particleAssoc.pdgCode()) != kMuonMinus) && (std::abs(particleAssoc.pdgCode()) != kPiPlus) && (std::abs(particleAssoc.pdgCode()) != kKPlus) && (std::abs(particleAssoc.pdgCode()) != kProton)) {
@@ -707,10 +734,8 @@ struct HfCorrelatorDsHadrons {
         // DsToKKPi and DsToPiKK division
         if (candidate.isSelDsToKKPi() >= selectionFlagDs) {
           fillHistoMcRecSig(candidate, 0.);
-          registry.fill(HIST("hSelectionStatusMcRec"), candidate.isSelDsToKKPi());
         } else if (candidate.isSelDsToPiKK() >= selectionFlagDs) {
           fillHistoMcRecSig(candidate, 0.);
-          registry.fill(HIST("hSelectionStatusMcRec"), candidate.isSelDsToPiKK());
         }
       } else {
         fillHistoMcRecBkg(candidate);
@@ -764,6 +789,7 @@ struct HfCorrelatorDsHadrons {
             outputMl[iclass] = candidate.mlProbDsToKKPi()[classMl->at(iclass)];
           }
           entryDsHadronMlInfo(outputMl[0], outputMl[2]);
+          entryTrackRecoInfo(pAssoc.dcaXY(), pAssoc.dcaZ(), pAssoc.tpcNClsCrossedRows());
         } else if (candidate.isSelDsToPiKK() >= selectionFlagDs) {
           entryDsHadronPair(getDeltaPhi(pAssoc.phi(), candidate.phi()),
                             pAssoc.eta() - candidate.eta(),
@@ -776,6 +802,7 @@ struct HfCorrelatorDsHadrons {
             outputMl[iclass] = candidate.mlProbDsToPiKK()[classMl->at(iclass)];
           }
           entryDsHadronMlInfo(outputMl[0], outputMl[2]);
+          entryTrackRecoInfo(pAssoc.dcaXY(), pAssoc.dcaZ(), pAssoc.tpcNClsCrossedRows());
         }
       }
     }
@@ -799,7 +826,7 @@ struct HfCorrelatorDsHadrons {
           if (std::abs(yD) > yCandGenMax || candidate.pt() < ptCandMin || candidate.pt() > ptCandMax) {
             continue;
           }
-          if (std::abs(particleAssoc.eta()) > etaTrackMax || particleAssoc.pt() < ptTrackMin || particleAssoc.pt() < ptTrackMax) {
+          if (std::abs(particleAssoc.eta()) > etaTrackMax || particleAssoc.pt() < ptTrackMin || particleAssoc.pt() > ptTrackMax) {
             continue;
           }
           if ((std::abs(particleAssoc.pdgCode()) != kElectron) && (std::abs(particleAssoc.pdgCode()) != kMuonMinus) && (std::abs(particleAssoc.pdgCode()) != kPiPlus) && (std::abs(particleAssoc.pdgCode()) != kKPlus) && (std::abs(particleAssoc.pdgCode()) != kProton)) {
