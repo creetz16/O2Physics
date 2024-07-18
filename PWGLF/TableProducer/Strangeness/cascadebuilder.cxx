@@ -1321,12 +1321,16 @@ struct cascadeBuilder {
       return false;
     }
 
+    // get KF chi2 geometrical
+    cascadecandidate.kfV0Chi2 = KFV0.GetChi2();
+
     // mass window cut on lambda before mass constraint
     float massLam, sigLam;
     KFV0.GetMass(massLam, sigLam);
     if (TMath::Abs(massLam - 1.116) > lambdaMassWindow)
       return false;
 
+    // set mass constraint if requested
     if (kfUseV0MassConstraint) {
       KFV0.SetNonlinearMassConstraint(o2::constants::physics::MassLambda);
     }
@@ -1385,8 +1389,13 @@ struct cascadeBuilder {
       LOG(debug) << "Failed to construct omega from V0 and bachelor track: " << e.what();
       return false;
     }
+    // get KF chi2 geometrical
+    cascadecandidate.kfCascadeChi2 = KFXi.GetChi2();
+    if (kfTuneForOmega)
+      cascadecandidate.kfCascadeChi2 = KFOmega.GetChi2();
+
+    // set mass constraint if requested
     if (kfUseCascadeMassConstraint) {
-      // set mass constraint if requested
       // WARNING: this is only adequate for decay chains, i.e. XiC -> Xi or OmegaC -> Omega
       KFXi.SetNonlinearMassConstraint(o2::constants::physics::MassXiMinus);
       KFOmega.SetNonlinearMassConstraint(o2::constants::physics::MassOmegaMinus);
@@ -1424,12 +1433,6 @@ struct cascadeBuilder {
     cascadecandidate.positiveId = posTrack.globalIndex();
     cascadecandidate.negativeId = negTrack.globalIndex();
     cascadecandidate.bachelorId = bachTrack.globalIndex();
-
-    // KF chi2
-    cascadecandidate.kfV0Chi2 = KFV0.GetChi2();
-    cascadecandidate.kfCascadeChi2 = KFXi.GetChi2();
-    if (kfTuneForOmega)
-      cascadecandidate.kfCascadeChi2 = KFOmega.GetChi2();
 
     // Daughter momentum not KF-updated FIXME --> but DCA fitter updated if pre-minimisation is used
     lBachelorTrack.getPxPyPzGlo(cascadecandidate.bachP);
