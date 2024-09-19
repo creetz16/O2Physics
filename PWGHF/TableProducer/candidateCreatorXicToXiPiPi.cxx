@@ -588,6 +588,7 @@ struct HfCandidateCreatorXicToXiPiPiExpressions {
       sign = 0;
       origin = RecoDecay::OriginType::None;
       debug = 0;
+      std::vector<int> idxBhadMothers{};
       arrDaughIndex.clear();
 
       auto arrayDaughters = std::array{candidate.pi0_as<aod::TracksWMc>(),       // pi <- Xic
@@ -641,10 +642,14 @@ struct HfCandidateCreatorXicToXiPiPiExpressions {
       // Check whether the charm baryon is non-prompt (from a b quark).
       if (flag != 0) {
         auto particle = mcParticles.rawIteratorAt(indexRecXicPlus);
-        origin = RecoDecay::getCharmHadronOrigin(mcParticles, particle, true);
+        origin = RecoDecay::getCharmHadronOrigin(mcParticles, particle, true, &idxBhadMothers);
       }
-
-      rowMcMatchRec(flag, debug, origin);
+      if (origin == RecoDecay::OriginType::NonPrompt) {
+        auto bHadMother = mcParticles.rawIteratorAt(idxBhadMothers[0]);
+        rowMcMatchRec(flag, debug, origin, bHadMother.pt(), bHadMother.pdgCode());
+      } else {
+        rowMcMatchRec(flag, debug, origin, -1.f, 0);
+      }
     } // close loop over candidates
 
     // Match generated particles.

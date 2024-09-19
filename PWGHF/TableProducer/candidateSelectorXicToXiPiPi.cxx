@@ -32,26 +32,56 @@ using namespace o2::analysis;
 struct HfCandidateSelectorXicToXiPiPi {
   Produces<aod::HfSelXicToXiPiPi> hfSelXicToXiPiPiCandidate;
 
+  // LF V0 selections
+  Configurable<double> radiusV0Min{"radiusV0Min", 1.0, "Min V0 radius"};
+  Configurable<double> cosPAV0Min{"cosPAV0Min", 0.95, "Min valueCosPA V0"};
+  Configurable<double> dcaV0DauMax{"dcaV0DauMax", 2.0, "Max DCA V0 daughters"};
+  Configurable<float> dcaV0ToPvMin{"dcaV0ToPvMin", 0.02, "DCA V0 To PV"};
+  Configurable<float> dcaNegToPvMin{"dcaNegToPvMin", 0.05, "DCA Neg To PV"};
+  Configurable<float> dcaPosToPvMin{"dcaPosToPvMin", 0.05, "DCA Pos To PV"};
+  // Configurable<bool> applyTrkSelLf{"applyTrkSelLf", true, "Apply track selection for LF daughters"};
+
+  // limits for Xic pT
   Configurable<float> ptCandMin{"ptCandMin", 0., "Lower bound of candidate pT"};
   Configurable<float> ptCandMax{"ptCandMax", 36., "Upper bound of candidate pT"};
-  // topological cuts
+  
+  // pT independent kinematic selections
+  Configurable<double> etaTrackPionsFromXicMax{"etaTrackPionsFromXicMax", 0.8, "Max absolute value of eta for charm baryon bachelor"};
+  Configurable<double> etaTrackLFDauMax{"etaTrackLFDauMax", 1.0, "Max absolute value of eta for V0 and cascade daughters"};
+  Configurable<double> ptPiFromCascMin{"ptPiFromCascMin", 0.15, "Min pT pi <- casc"};
+
+  // pT dependent topological and kindematic cuts
   Configurable<std::vector<double>> binsPt{"binsPt", std::vector<double>{hf_cuts_xic_to_xi_pi_pi::vecBinsPt}, "pT bin limits"};
   Configurable<LabeledArray<double>> cuts{"cuts", {hf_cuts_xic_to_xi_pi_pi::cuts[0], hf_cuts_xic_to_xi_pi_pi::nBinsPt, hf_cuts_xic_to_xi_pi_pi::nCutVars, hf_cuts_xic_to_xi_pi_pi::labelsPt, hf_cuts_xic_to_xi_pi_pi::labelsCutVar}, "Xicplus candidate selection per pT bin"};
-  // QA switch
-  Configurable<bool> activateQA{"activateQA", false, "Flag to enable QA histogram"};
-  // Enable PID
+  
+  // PID options
   Configurable<bool> usePid{"usePid", true, "Switch for PID selection at track level"};
   Configurable<bool> acceptPIDNotApplicable{"acceptPIDNotApplicable", true, "Switch to accept Status::NotApplicable [(NotApplicable for one detector) and (NotApplicable or Conditional for the other)] in PID selection"};
-  // TPC PID
-  Configurable<float> ptPidTpcMin{"ptPidTpcMin", 0.15, "Lower bound of track pT for TPC PID"};
-  Configurable<float> ptPidTpcMax{"ptPidTpcMax", 20., "Upper bound of track pT for TPC PID"};
-  Configurable<float> nSigmaTpcMax{"nSigmaTpcMax", 5., "Nsigma cut on TPC only"};
-  Configurable<float> nSigmaTpcCombinedMax{"nSigmaTpcCombinedMax", 5., "Nsigma cut on TPC combined with TOF"};
-  // TOF PID
-  Configurable<float> ptPidTofMin{"ptPidTofMin", 0.15, "Lower bound of track pT for TOF PID"};
-  Configurable<float> ptPidTofMax{"ptPidTofMax", 20., "Upper bound of track pT for TOF PID"};
-  Configurable<float> nSigmaTofMax{"nSigmaTofMax", 5., "Nsigma cut on TOF only"};
-  Configurable<float> nSigmaTofCombinedMax{"nSigmaTofCombinedMax", 5., "Nsigma cut on TOF combined with TPC"};
+  
+  // PID - TPC selections
+  Configurable<float> ptPiPidTpcMin{"ptPiPidTpcMin", 0.15, "Lower bound of pion pT for TPC PID"};
+  Configurable<float> ptPiPidTpcMax{"ptPiPidTpcMax", 20., "Upper bound of pion pT for TPC PID"};
+  Configurable<float> nSigmaTpcPiMax{"nSigmaTpcPiMax", 5., "Nsigma cut on TPC only for pions"};
+  Configurable<float> nSigmaTpcCombinedPiMax{"nSigmaTpcCombinedPiMax", 5., "Nsigma cut on TPC combined with TOF for pions"};
+
+  Configurable<float> ptPrPidTpcMin{"ptPrPidTpcMin", 0.15, "Lower bound of proton pT for TPC PID"};
+  Configurable<float> ptPrPidTpcMax{"ptPrPidTpcMax", 20., "Upper bound of proton pT for TPC PID"};
+  Configurable<float> nSigmaTpcPrMax{"nSigmaTpcPrMax", 5., "Nsigma cut on TPC only for protons"};
+  Configurable<float> nSigmaTpcCombinedPrMax{"nSigmaTpcCombinedPrMax", 5., "Nsigma cut on TPC combined with TOF for protons"};
+  
+  // PID - TOF selections
+  Configurable<float> ptPiPidTofMin{"ptPiPidTofMin", 0.15, "Lower bound of pion pT for TOF PID"};
+  Configurable<float> ptPiPidTofMax{"ptPiPidTofMax", 20., "Upper bound of pion pT for TOF PID"};
+  Configurable<float> nSigmaTofPiMax{"nSigmaTofPiMax", 5., "Nsigma cut on TOF only for pions"};
+  Configurable<float> nSigmaTofCombinedPiMax{"nSigmaTofCombinedPiMax", 5., "Nsigma cut on TOF combined with TPC for pions"};
+
+  Configurable<float> ptPrPidTofMin{"ptPrPidTofMin", 0.15, "Lower bound of proton pT for TOF PID"};
+  Configurable<float> ptPrPidTofMax{"ptPrPidTofMax", 20., "Upper bound of proton pT for TOF PID"};
+  Configurable<float> nSigmaTofPrMax{"nSigmaTofPrMax", 5., "Nsigma cut on TOF only for protons"};
+  Configurable<float> nSigmaTofCombinedPrMax{"nSigmaTofCombinedPrMax", 5., "Nsigma cut on TOF combined with TPC for protons"};
+
+  // QA switch
+  Configurable<bool> activateQA{"activateQA", false, "Flag to enable QA histogram"};
 
   TrackSelectorPi selectorPion;
   TrackSelectorPr selectorProton;
@@ -153,6 +183,11 @@ struct HfCandidateSelectorXicToXiPiPi {
     if (hfCandXic.ptProng0() < cuts->get(pTBin, "pT Xi") ||
         hfCandXic.ptProng1() < cuts->get(pTBin, "pT Pi0") ||
         hfCandXic.ptProng2() < cuts->get(pTBin, "pT Pi1")) {
+      return false;
+    }
+
+    // cut on sum of pion pT
+    if (hfCandXic.ptProng1() + hfCandXic.ptProng2() < cuts->get(pTBin, "pT Pi0+Pi1")) {
       return false;
     }
 

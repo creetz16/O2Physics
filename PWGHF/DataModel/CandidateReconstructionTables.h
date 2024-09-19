@@ -1512,7 +1512,10 @@ DECLARE_SOA_TABLE(HfCandXicKF, "AOD", "HFCANDXICKF",
 DECLARE_SOA_TABLE(HfCandXicMcRec, "AOD", "HFCANDXICMCREC", //!
                   hf_cand_xic_to_xi_pi_pi::FlagMcMatchRec,
                   hf_cand_xic_to_xi_pi_pi::DebugMcRec,
-                  hf_cand_xic_to_xi_pi_pi::OriginRec);
+                  hf_cand_xic_to_xi_pi_pi::OriginRec,
+                  hf_cand::PtBhadMotherPart,
+                  hf_cand::PdgBhadMotherPart,
+                  o2::soa::Marker<1>);
 
 // table with results of generator level MC matching
 DECLARE_SOA_TABLE(HfCandXicMcGen, "AOD", "HFCANDXICMCGEN", //!
