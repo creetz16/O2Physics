@@ -61,6 +61,13 @@ void DielectronCut::SelectPhotonConversion(bool flag)
   mSelectPC = flag;
   LOG(info) << "Dielectron Cut, select photon conversion: " << mSelectPC;
 }
+void DielectronCut::SetMindEtadPhi(bool flag, float min_deta, float min_dphi)
+{
+  mApplydEtadPhi = flag;
+  mMinDeltaEta = min_deta;
+  mMinDeltaPhi = min_dphi;
+  LOG(info) << "Dielectron Cut, set apply deta-dphi cut: " << mApplydEtadPhi << " min_deta: " << mMinDeltaEta << " min_dphi: " << mMinDeltaPhi;
+}
 void DielectronCut::SetTrackPtRange(float minPt, float maxPt)
 {
   mMinTrackPt = minPt;
@@ -94,6 +101,11 @@ void DielectronCut::SetMinNCrossedRowsOverFindableClustersTPC(float minNCrossedR
   mMinNCrossedRowsOverFindableClustersTPC = minNCrossedRowsOverFindableClustersTPC;
   LOG(info) << "Dielectron Cut, set min N crossed rows over findable clusters TPC: " << mMinNCrossedRowsOverFindableClustersTPC;
 }
+void DielectronCut::SetMaxFracSharedClustersTPC(float max)
+{
+  mMaxFracSharedClustersTPC = max;
+  LOG(info) << "Dielectron Cut, set max fraction of shared clusters in  TPC: " << mMaxFracSharedClustersTPC;
+}
 void DielectronCut::SetChi2PerClusterTPC(float min, float max)
 {
   mMinChi2PerClusterTPC = min;
@@ -113,10 +125,11 @@ void DielectronCut::SetChi2PerClusterITS(float min, float max)
   mMaxChi2PerClusterITS = max;
   LOG(info) << "Dielectron Cut, set chi2 per cluster ITS range: " << mMinChi2PerClusterITS << " - " << mMaxChi2PerClusterITS;
 }
-void DielectronCut::SetMeanClusterSizeITS(float min, float max, float maxP)
+void DielectronCut::SetMeanClusterSizeITS(float min, float max, float minP, float maxP)
 {
   mMinMeanClusterSizeITS = min;
   mMaxMeanClusterSizeITS = max;
+  mMinP_ITSClusterSize = minP;
   mMaxP_ITSClusterSize = maxP;
   LOG(info) << "Dielectron Cut, set mean cluster size ITS range: " << mMinMeanClusterSizeITS << " - " << mMaxMeanClusterSizeITS;
 }
