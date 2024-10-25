@@ -94,19 +94,19 @@ struct HfCandidateSelectorXicToXiPiPi {
   {
     if (usePid) {
       // pion
-      selectorPion.setRangePtTpc(ptPidTpcMin, ptPidTpcMax);
-      selectorPion.setRangeNSigmaTpc(-nSigmaTpcMax, nSigmaTpcMax);
-      selectorPion.setRangeNSigmaTpcCondTof(-nSigmaTpcCombinedMax, nSigmaTpcCombinedMax);
-      selectorPion.setRangePtTof(ptPidTofMin, ptPidTofMax);
-      selectorPion.setRangeNSigmaTof(-nSigmaTofMax, nSigmaTofMax);
-      selectorPion.setRangeNSigmaTofCondTpc(-nSigmaTofCombinedMax, nSigmaTofCombinedMax);
+      selectorPion.setRangePtTpc(ptPiPidTpcMin, ptPiPidTpcMax);
+      selectorPion.setRangeNSigmaTpc(-nSigmaTpcPiMax, nSigmaTpcPiMax);
+      selectorPion.setRangeNSigmaTpcCondTof(-nSigmaTpcCombinedPiMax, nSigmaTpcCombinedPiMax);
+      selectorPion.setRangePtTof(ptPiPidTofMin, ptPiPidTofMax);
+      selectorPion.setRangeNSigmaTof(-nSigmaTofPiMax, nSigmaTofPiMax);
+      selectorPion.setRangeNSigmaTofCondTpc(-nSigmaTofCombinedPiMax, nSigmaTofCombinedPiMax);
       // proton
-      selectorProton.setRangePtTpc(ptPidTpcMin, ptPidTpcMax);
-      selectorProton.setRangeNSigmaTpc(-nSigmaTpcMax, nSigmaTpcMax);
-      selectorProton.setRangeNSigmaTpcCondTof(-nSigmaTpcCombinedMax, nSigmaTpcCombinedMax);
-      selectorProton.setRangePtTof(ptPidTofMin, ptPidTofMax);
-      selectorProton.setRangeNSigmaTof(-nSigmaTofMax, nSigmaTofMax);
-      selectorProton.setRangeNSigmaTofCondTpc(-nSigmaTofCombinedMax, nSigmaTofCombinedMax);
+      selectorProton.setRangePtTpc(ptPrPidTpcMin, ptPrPidTpcMax);
+      selectorProton.setRangeNSigmaTpc(-nSigmaTpcPrMax, nSigmaTpcPrMax);
+      selectorProton.setRangeNSigmaTpcCondTof(-nSigmaTpcCombinedPrMax, nSigmaTpcCombinedPrMax);
+      selectorProton.setRangePtTof(ptPrPidTofMin, ptPrPidTofMax);
+      selectorProton.setRangeNSigmaTof(-nSigmaTofPrMax, nSigmaTofPrMax);
+      selectorProton.setRangeNSigmaTofCondTpc(-nSigmaTofCombinedPrMax, nSigmaTofCombinedPrMax);
     }
 
     if (activateQA) {
