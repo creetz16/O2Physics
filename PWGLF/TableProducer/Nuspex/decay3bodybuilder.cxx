@@ -312,6 +312,7 @@ struct decay3bodyBuilder {
     ConfigurableAxis bins3BodyPosZ{"kfparticleConfigurations.bins3BodyPosZ", {VARIABLE_WIDTH, -300.0f, -42.0f, -13.0f, -6.0f, -4.0f, -2.0f, 0.0f, 2.0f, 4.0f, 6.0f, 13.0f, 42.0f, 300.0f}, "Mixing bins - 3body z position"};
     Configurable<bool> selectVtxZ3bodyMixing{"kfparticleConfigurations.selectVtxZ3bodyMixing", true, "Select same VtxZ events in case of 3body mixing"};
     Configurable<float> VtxZBin3bodyMixing{"kfparticleConfigurations.VtxZBin3bodyMixing", 1., "Bin width for event vtx z position in case of 3body mixing"};
+    Configurable<bool> cfgApplyV0Cut{"kfparticleConfigurations.cfgApplyV0Cut", true, "Apply SV V0 cuts in case of 3body mixing"};
   } kfparticleConfigurations;
 
   //------------------------------------------------------------------
@@ -596,6 +597,10 @@ struct decay3bodyBuilder {
       registry.add("QA/EM/hRadius", "hRadius", HistType::kTH1F, {radiusAxis});
       registry.add("QA/EM/hPhi", "hPhi", HistType::kTH1F, {phiAxis});
       registry.add("QA/EM/hPosZ", "hPosZ", HistType::kTH1F, {posZAxis});
+    }
+
+    if (doprocessRun3withKFParticleReducedEM == true || doprocessRun3withKFParticleReduced3bodyMixing == true) {
+      registry.add("Counters/h3bodyEMCutCounter", "h3bodyEMCutCounter", HistType::kTH1D, {{14, 0.0f, 14.0f}});
     }
   }
 
@@ -1494,26 +1499,6 @@ struct decay3bodyBuilder {
     }
     registry.fill(HIST("Counters/hVtx3BodyCounterKFParticle"), kKfVtxV0MassConst);
 
-    // apply virtual V0 cuts used in SVertexer in case of 3body mixing with proton track
-    if (kfparticleConfigurations.mixingType == 1 && kfparticleConfigurations.applySVertexerV0Cuts) {
-      // V0 radius
-      if (std::sqrt(KFV0.GetX() * KFV0.GetX() + KFV0.GetY() * KFV0.GetY()) <= 0.5) {
-        return;
-      }
-      // pT
-      if (KFV0.GetPt() <= 0.01) {
-        return;
-      }
-      // pz/pT
-      if (KFV0.GetPz() / KFV0.GetPt() >= 2) {
-        return;
-      }
-      // cos(PA)
-      if (cpaXYFromKF(KFV0, kfpv) <= 0.9 || cpaFromKF(KFV0, kfpv) <= 0.8) {
-        return;
-      }
-    }
-
     // -------- STEP 3: fit three body vertex --------
     // Create KFParticle object from deuteron track
     KFParticle kfpDeuteron;
@@ -1611,6 +1596,142 @@ struct decay3bodyBuilder {
       return;
     }
     registry.fill(HIST("Counters/hVtx3BodyCounterKFParticle"), kKfVtxChi2topo);
+
+    // ------------- Additional SVertexer cuts in EM case -----------
+    /// TODO: adjust code
+    // additional cut for EM/3bodyMixing
+    if (decay3bodyID == -1) {
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 0.5);
+      auto v0TrackPos = getTrackParCov(trackPos);
+      auto v0TrackNeg = getTrackParCov(trackNeg);
+      int nV0 = fitterV0.process(v0TrackPos, v0TrackNeg);
+      if (nV0 == 0) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 1.5);
+
+      std::array<float, 3> v0pos = {0.};
+      const auto& v0vtxXYZ = fitterV0.getPCACandidate();
+      for (int i = 0; i < 3; i++) {
+        v0pos[i] = v0vtxXYZ[i];
+      }
+      const int cand = 0;
+      if (!fitterV0.isPropagateTracksToVertexDone(cand) && !fitterV0.propagateTracksToVertex(cand)) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 2.5);
+
+      const auto& trPProp = fitterV0.getTrack(0, cand);
+      const auto& trNProp = fitterV0.getTrack(1, cand);
+      std::array<float, 3> pP{}, pN{};
+      trPProp.getPxPyPzGlo(pP);
+      trNProp.getPxPyPzGlo(pN);
+      std::array<float, 3> pV0 = {pP[0] + pN[0], pP[1] + pN[1], pP[2] + pN[2]};
+      // Cut for Virtual V0
+      float dxv0 = v0pos[0] - mMeanVertex.getX(), dyv0 = v0pos[1] - mMeanVertex.getY(), r2v0 = dxv0 * dxv0 + dyv0 * dyv0;
+      float rv0 = std::sqrt(r2v0);
+      float pt2V0 = pV0[0] * pV0[0] + pV0[1] * pV0[1], prodXYv0 = dxv0 * pV0[0] + dyv0 * pV0[1], tDCAXY = prodXYv0 / pt2V0;
+      if (kfparticleConfigurations.cfgApplyV0Cut && pt2V0 <= dcaFitterEMSel.mMinPt2V0) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 3.5);
+      if (kfparticleConfigurations.cfgApplyV0Cut && pV0[2] * pV0[2] / pt2V0 > dcaFitterEMSel.mMaxTgl2V0) { // tgLambda cut
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 4.5);
+
+      float p2V0 = pt2V0 + pV0[2] * pV0[2], ptV0 = std::sqrt(pt2V0);
+      // apply mass selections
+      float p2Pos = pP[0] * pP[0] + pP[1] * pP[1] + pP[2] * pP[2], p2Neg = pN[0] * pN[0] + pN[1] * pN[1] + pN[2] * pN[2];
+      bool good3bodyV0Hyp = false;
+      for (int ipid = 0; ipid < 2; ipid++) {
+        float massForLambdaHyp = mV0Hyps[ipid].calcMass(p2Pos, p2Neg, p2V0);
+        if (massForLambdaHyp - mV0Hyps[ipid].getMassV0Hyp() < mV0Hyps[ipid].getMargin(ptV0)) {
+          good3bodyV0Hyp = true;
+          break;
+        }
+      }
+      if (kfparticleConfigurations.cfgApplyV0Cut && !good3bodyV0Hyp) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 5.5);
+
+      float dcaX = dxv0 - pV0[0] * tDCAXY, dcaY = dyv0 - pV0[1] * tDCAXY, dca2 = dcaX * dcaX + dcaY * dcaY;
+      float cosPAXY = prodXYv0 / rv0 * ptV0;
+      if (kfparticleConfigurations.cfgApplyV0Cut && dca2 > dcaFitterEMSel.mMaxDCAXY2ToMeanVertex3bodyV0) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 6.5);
+      // FIXME: V0 cosPA cut to be investigated
+      if (kfparticleConfigurations.cfgApplyV0Cut && cosPAXY < dcaFitterEMSel.minCosPAXYMeanVertex3bodyV0) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 7.5);
+      // Check: CosPA Cut of Virtual V0 may not be used since the V0 may be based on another PV
+      float dx = v0pos[0] - collision.posX(), dy = v0pos[1] - collision.posY(), dz = v0pos[2] - collision.posZ(), prodXYZv0 = dx * pV0[0] + dy * pV0[1] + dz * pV0[2];
+      float v0CosPA = prodXYZv0 / std::sqrt((dx * dx + dy * dy + dz * dz) * p2V0);
+      if (kfparticleConfigurations.cfgApplyV0Cut && v0CosPA < dcaFitterEMSel.minCosPA3bodyV0) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 8.5);
+
+      // 3body vertex
+      auto TrackBach = getTrackParCov(trackBach);
+      int n3bodyVtx = fitter3body.process(v0TrackPos, v0TrackNeg, TrackBach);
+      if (n3bodyVtx == 0) { // discard this pair
+        return;
+      }
+      const auto& vertexXYZ = fitter3body.getPCACandidatePos();
+      std::array<float, 3> pos = {0.};
+      for (int i = 0; i < 3; i++) {
+        pos[i] = vertexXYZ[i];
+      }
+
+      std::array<float, 3> p0 = {0.}, p1 = {0.}, p2{0.};
+      const auto& propagatedTrackPos = fitter3body.getTrack(0);
+      const auto& propagatedTrackNeg = fitter3body.getTrack(1);
+      const auto& propagatedTrackBach = fitter3body.getTrack(2);
+      propagatedTrackPos.getPxPyPzGlo(p0);
+      propagatedTrackNeg.getPxPyPzGlo(p1);
+      propagatedTrackBach.getPxPyPzGlo(p2);
+      for (int i = 0; i < 3; i++) {
+        p2[i] *= bachelorcharge;
+      }
+      std::array<float, 3> p3B = {p0[0] + p1[0] + p2[0], p0[1] + p1[1] + p2[1], p0[2] + p1[2] + p2[2]};
+
+      float r3body = std::hypot(pos[0], pos[1]);
+      if (r3body < 0.5) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 9.5);
+
+      // Cut for the compatibility of V0 and 3body vertex
+      float deltaR = std::abs(rv0 - r3body);
+      if (deltaR > dcaFitterEMSel.maxRDiffV03body) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 10.5);
+
+      float pt3B = std::hypot(p3B[0], p3B[1]);
+      if (pt3B < dcaFitterEMSel.minPt3Body) { // pt cut
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 11.5);
+      if (p3B[2] / pt3B > dcaFitterEMSel.maxTgl3Body) { // tgLambda cut
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 12.5);
+
+      // H3L DCA Check
+      auto track3B = o2::track::TrackParCov(vertexXYZ, p3B, trackBach.sign());
+      o2::dataformats::DCA dca;
+      if (!track3B.propagateToDCA({{collision.posX(), collision.posY(), collision.posZ()}, {collision.covXX(), collision.covXY(), collision.covYY(), collision.covXZ(), collision.covYZ(), collision.covZZ()}}, fitter3body.getBz(), &dca, 5.) ||
+          std::abs(dca.getY()) > dcaFitterEMSel.maxDCAXY3Body || std::abs(dca.getZ()) > dcaFitterEMSel.maxDCAZ3Body) {
+        return;
+      }
+      registry.fill(HIST("Counters/h3bodyEMCutCounter"), 13.5);
+    }
+    /// TODO: end adjust code
 
     // -------- STEP 6: collect and fill candidate info --------
     // get cluster size of strangeness tracked 3bodies
