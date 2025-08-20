@@ -284,16 +284,46 @@ class decay3bodyBuilderHelper
     // daughter track DCA to PV associated with decay3body
     o2::dataformats::VertexBase mPV;
     o2::dataformats::DCA mDcaInfoCov;
+    auto propInstance = o2::base::Propagator::Instance();
     auto trackParCovProtonCopy = trackParCovProton;
     auto trackParCovPionCopy = trackParCovPion;
     auto trackParCovDeuteronCopy = trackParCovDeuteron;
     mPV.setPos({pvX, pvY, pvZ});
     mPV.setCov(collision.covXX(), collision.covXY(), collision.covYY(), collision.covXZ(), collision.covYZ(), collision.covZZ());
 
+    // // KFParticle propagation to PV
+    // float pvXY[2] = {pvX, pvY};
+    // float pv[3] = {pvX, pvY, pvZ};
+    // KFParticle kfproton = createKFParticleFromTrackParCov(trackParCovProtonCopy, trackProton.sign(), constants::physics::MassProton);
+    // KFParticle kfpion = createKFParticleFromTrackParCov(trackParCovPionCopy, trackPion.sign(), constants::physics::MassPionCharged);
+    // KFParticle kfdeuteron = createKFParticleFromTrackParCov(trackParCovDeuteronCopy, trackDeuteron.sign(), constants::physics::MassDeuteron);
+    // // proton DCA to PV
+    // decay3body.trackDCAxyToPV[0] = kfproton.GetDistanceFromVertexXY(pvXY);
+    // float dcaProton = kfproton.GetDistanceFromVertex(pv);
+    // float dcaZproton2 = dcaProton * dcaProton - decay3body.trackDCAxyToPV[0] * decay3body.trackDCAxyToPV[0];
+    // float dcaZproton = dcaZproton2 > 0 ? std::sqrt(dcaZproton2) : -std::sqrt(-dcaZproton2);
+    // decay3body.trackDCAzToPV[0] = dcaZproton;
+    // // pion DCA to PV
+    // decay3body.trackDCAxyToPV[1] = kfpion.GetDistanceFromVertexXY(pvXY);
+    // float dcaPion = kfpion.GetDistanceFromVertex(pv);
+    // float dcaZpion2 = dcaPion * dcaPion - decay3body.trackDCAxyToPV[1] * decay3body.trackDCAxyToPV[1];
+    // float dcaZpion = dcaZpion2 > 0 ? std::sqrt(dcaZpion2) : -std::sqrt(-dcaZpion2);
+    // decay3body.trackDCAzToPV[1] = dcaZpion;
+    // // deuteron DCA to PV
+    // decay3body.trackDCAxyToPV[2] = kfdeuteron.GetDistanceFromVertexXY(pvXY);
+    // float dcaDeuteron = kfdeuteron.GetDistanceFromVertex(pv);
+    // float dcaZdeuteron2 = dcaDeuteron * dcaDeuteron - decay3body.trackDCAxyToPV[2] * decay3body.trackDCAxyToPV[2];
+    // float dcaZdeuteron = dcaZdeuteron2 > 0 ? std::sqrt(dcaZdeuteron2) : -std::sqrt(-dcaZdeuteron2);
+    // decay3body.trackDCAzToPV[2] = dcaZdeuteron;
+
     // proton track
-    o2::base::Propagator::Instance()->propagateToDCABxByBz(mPV, trackParCovProtonCopy, 2.f, fitter3body.getMatCorrType(), &mDcaInfoCov);
-    decay3body.trackDCAxyToPV[0] = mDcaInfoCov.getY();
-    decay3body.trackDCAzToPV[0] = mDcaInfoCov.getZ();
+    if (!propInstance->propagateToDCABxByBz(mPV, trackParCovProtonCopy, 2.f, fitter3body.getMatCorrType(), &mDcaInfoCov)) {
+      decay3body.trackDCAxyToPV[0] = -999;
+      decay3body.trackDCAzToPV[0] = -999;
+    } else {
+      decay3body.trackDCAxyToPV[0] = mDcaInfoCov.getY();
+      decay3body.trackDCAzToPV[0] = mDcaInfoCov.getZ();
+    }
     auto trackProtonDCAToPV = std::sqrt(decay3body.trackDCAxyToPV[0] * decay3body.trackDCAxyToPV[0] + decay3body.trackDCAzToPV[0] * decay3body.trackDCAzToPV[0]);
     if (useSelections) {
       if (trackProtonDCAToPV < decay3bodyselections.minDCAProtonToPV) {
@@ -302,9 +332,13 @@ class decay3bodyBuilderHelper
       }
     }
     // pion track
-    o2::base::Propagator::Instance()->propagateToDCABxByBz(mPV, trackParCovPionCopy, 2.f, fitter3body.getMatCorrType(), &mDcaInfoCov);
-    decay3body.trackDCAxyToPV[1] = mDcaInfoCov.getY();
-    decay3body.trackDCAzToPV[1] = mDcaInfoCov.getZ();
+    if (!propInstance->propagateToDCABxByBz(mPV, trackParCovPionCopy, 2.f, fitter3body.getMatCorrType(), &mDcaInfoCov)) {
+      decay3body.trackDCAxyToPV[1] = -999;
+      decay3body.trackDCAzToPV[1] = -999;
+    } else {
+      decay3body.trackDCAxyToPV[1] = mDcaInfoCov.getY();
+      decay3body.trackDCAzToPV[1] = mDcaInfoCov.getZ();
+    }
     auto trackPionDCAToPV = std::sqrt(decay3body.trackDCAxyToPV[1] * decay3body.trackDCAxyToPV[1] + decay3body.trackDCAzToPV[1] * decay3body.trackDCAzToPV[1]);
     if (useSelections) {
       if (trackPionDCAToPV < decay3bodyselections.minDCAPionToPV) {
@@ -313,9 +347,13 @@ class decay3bodyBuilderHelper
       }
     }
     // deuteron track
-    o2::base::Propagator::Instance()->propagateToDCABxByBz(mPV, trackParCovDeuteronCopy, 2.f, fitter3body.getMatCorrType(), &mDcaInfoCov);
-    decay3body.trackDCAxyToPV[2] = mDcaInfoCov.getY();
-    decay3body.trackDCAzToPV[2] = mDcaInfoCov.getZ();
+    if (!propInstance->propagateToDCABxByBz(mPV, trackParCovDeuteronCopy, 2.f, fitter3body.getMatCorrType(), &mDcaInfoCov)) {
+      decay3body.trackDCAxyToPV[2] = -999;
+      decay3body.trackDCAzToPV[2] = -999;
+    } else {
+      decay3body.trackDCAxyToPV[2] = mDcaInfoCov.getY();
+      decay3body.trackDCAzToPV[2] = mDcaInfoCov.getZ();
+    }
     auto trackDeuteronDCAToPV = std::sqrt(decay3body.trackDCAxyToPV[2] * decay3body.trackDCAxyToPV[2] + decay3body.trackDCAzToPV[2] * decay3body.trackDCAzToPV[2]);
     if (useSelections) {
       if (trackDeuteronDCAToPV < decay3bodyselections.minDCADeuteronToPV) {
@@ -486,6 +524,30 @@ class decay3bodyBuilderHelper
 
     // tracked cluster size
     decay3body.trackedClSize = trackedClSize;
+
+
+    // ===================== QA printouts ========================
+    LOG(info) << "==================================================================================================================================";
+    LOG(info) << "=================================================== Candidate printouts ==========================================================";
+    LOG(info) << "==================================================================================================================================";
+
+    LOG(info) << "Candidate collision ID: " << collision.globalIndex();
+    LOG(info) << "Collision vertex position: (" << pvX << ", " << pvY << ", " << pvZ << ")";
+    LOG(info) << "Magnetic field value: " << o2::base::Propagator::Instance()->getNominalBz();
+    LOG(info) << "------------------------------------ Candidate -------------------------------------";
+    LOG(info) << "Candidate cosPA: " << decay3body.cosPA;
+    LOG(info) << "-------------------------------------- Proton --------------------------------------";
+    LOG(info) << "Proton track IU position: (" << trackProton.x() << ", " << trackProton.y() << ", " << trackProton.z() << ")";
+    LOG(info) << "Proton track IU momentum: (" << trackProton.px() << ", " << trackProton.py() << ", " << trackProton.pz() << ")";
+    LOG(info) << "Proton track DCA to PV: (" << decay3body.trackDCAxyToPV[0] << ", " << decay3body.trackDCAzToPV[0] << ")";
+    LOG(info) << "--------------------------------------- Pion ---------------------------------------";
+    LOG(info) << "Pion track IU position: (" << trackPion.x() << ", " << trackPion.y() << ", " << trackPion.z() << ")";
+    LOG(info) << "Pion track IU momentum: (" << trackPion.px() << ", " << trackPion.py() << ", " << trackPion.pz() << ")";
+    LOG(info) << "Pion track DCA to PV: (" << decay3body.trackDCAxyToPV[1] << ", " << decay3body.trackDCAzToPV[1] << ")";
+    LOG(info) << "------------------------------------- Deuteron -------------------------------------";
+    LOG(info) << "Deuteron track IU position: (" << trackDeuteron.x() << ", " << trackDeuteron.y() << ", " << trackDeuteron.z() << ")";
+    LOG(info) << "Deuteron track IU momentum: (" << trackDeuteron.px() << ", " << trackDeuteron.py() << ", " << trackDeuteron.pz() << ")";
+    LOG(info) << "Deuteron track DCA to PV: (" << decay3body.trackDCAxyToPV[2] << ", " << decay3body.trackDCAzToPV[2] << ")";
 
     return true;
   }

@@ -326,7 +326,7 @@ struct reduced3bodyCreator {
         reducedPVMults(collision.multNTracksPV());
         reducedCentFT0Cs(collision.centFT0C());
 
-        lastCollisionID = collision.globalIndex();
+        lastCollisionID = collision.globalIndex(); // decay3body table is sorted
       }
 
       // Precompute collision index

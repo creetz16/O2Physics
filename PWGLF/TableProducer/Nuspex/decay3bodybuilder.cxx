@@ -187,7 +187,7 @@ struct decay3bodyBuilder {
   struct : ConfigurableGroup {
     std::string prefix = "mixingOpts";
     Configurable<int> n3bodyMixing{"n3bodyMixing", 0, "Number of decay3bodys to mix: 0 - value set to maximum bin entry in hDecay3BodyRadiusPhi, > 0 - manual setting"};
-    Configurable<int> mixingType{"mixingType", 0, "0: mix V0 from one event with bachelor from another, 1: mix pion and bachelor from one event with proton from another, 1: mix proton and bachelor from one event with pion from another "};
+    Configurable<int> mixingType{"mixingType", 0, "0: mix V0 from one event with bachelor from another, 1: mix pion and bachelor from one event with proton from another, 2: mix proton and bachelor from one event with pion from another "};
     ConfigurableAxis bins3BodyRadius{"mixingOpts.bins3BodyRadius", {VARIABLE_WIDTH, 0.0f, 2.0f, 4.0f, 7.0f, 10.0f, 14.0f, 18.0f, 22.0f, 30.0f, 40.0f}, "Mixing bins - 3body radius"};
     ConfigurableAxis bins3BodyPhi{"mixingOpts.bins3BodyPhi", {VARIABLE_WIDTH, -180 * o2::constants::math::Deg2Rad, -120 * o2::constants::math::Deg2Rad, -60 * o2::constants::math::Deg2Rad, 0, 60 * o2::constants::math::Deg2Rad, 120 * o2::constants::math::Deg2Rad, 180 * o2::constants::math::Deg2Rad}, "Mixing bins - 3body phi (rad)"};
     ConfigurableAxis bins3BodyPhiDegree{"mixingOpts.bins3BodyPhiDegree", {VARIABLE_WIDTH, -180, -120, -60, 0, 60, 120, 180}, "Mixing bins - 3body phi (degree)"};
@@ -284,10 +284,12 @@ struct decay3bodyBuilder {
     ccdb->setFatalWhenNull(false);
 
     // TOF PID parameters initialization
-    mTOFCalibConfig.metadataInfo = metadataInfo;
-    mTOFCalibConfig.inheritFromBaseTask(initContext);
-    mTOFCalibConfig.initSetup(mRespParamsV3, ccdb);
-
+    if (doprocessRealData == true || doprocessMonteCarlo == true) {
+      mTOFCalibConfig.metadataInfo = metadataInfo;
+      mTOFCalibConfig.inheritFromBaseTask(initContext);
+      mTOFCalibConfig.initSetup(mRespParamsV3, ccdb);
+    }
+    
     // Set material correction
     if (useMatCorrType == 1) {
       LOGF(info, "TGeo correction requested, loading geometry");
