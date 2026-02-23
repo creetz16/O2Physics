@@ -74,6 +74,45 @@ using std::array;
 
 using namespace o2::aod::rctsel;
 
+namespace o2::aod
+{
+namespace V0info
+{
+  DECLARE_SOA_COLUMN(V0mass, v0mass, float);
+  DECLARE_SOA_COLUMN(V0pt, v0pt, float);
+  DECLARE_SOA_COLUMN(V0eta, v0eta, float);
+  DECLARE_SOA_COLUMN(V0phi, v0phi, float);
+  DECLARE_SOA_COLUMN(V0rap, v0rap, float);
+  DECLARE_SOA_COLUMN(V0radius, v0radius, float);
+  DECLARE_SOA_COLUMN(V0cosPA, v0cosPA, float);
+  DECLARE_SOA_COLUMN(V0dcaDaughters, v0dcaDaughters, float);
+  DECLARE_SOA_COLUMN(PosDcaToPV, posDcaToPV, float);
+  DECLARE_SOA_COLUMN(NegDcaToPV, negDcaToPV, float);
+  DECLARE_SOA_COLUMN(PosNsigmaTPC, posNsigmaTPC, float);
+  DECLARE_SOA_COLUMN(NegNsigmaTPC, negNsigmaTPC, float);
+  DECLARE_SOA_COLUMN(PosNsigmaTOF, posNsigmaTOF, float);
+  DECLARE_SOA_COLUMN(NegNsigmaTOF, negNsigmaTOF, float);
+} // namespace V0info
+
+DECLARE_SOA_TABLE(V0TOFinfo, "AOD", "V0TOFINFO",
+                  V0info::V0mass,
+                  V0info::V0pt,
+                  V0info::V0eta,
+                  V0info::V0phi,
+                  V0info::V0rap,
+                  V0info::V0radius,
+                  V0info::V0cosPA,
+                  V0info::V0dcaDaughters,
+                  V0info::PosDcaToPV,
+                  V0info::NegDcaToPV,
+                  V0info::PosNsigmaTPC,
+                  V0info::NegNsigmaTPC,
+                  V0info::PosNsigmaTOF,
+                  V0info::NegNsigmaTOF
+                );
+
+} // namespace o2::aod
+
 using DauTracks = soa::Join<aod::DauTrackExtras, aod::DauTrackTPCPIDs>;
 using DauMCTracks = soa::Join<aod::DauTrackExtras, aod::DauTrackMCIds, aod::DauTrackTPCPIDs>;
 using V0Candidates = soa::Join<aod::V0CollRefs, aod::V0Cores, aod::V0Extras, aod::V0TOFPIDs, aod::V0TOFNSigmas, aod::V0LambdaMLScores, aod::V0AntiLambdaMLScores, aod::V0K0ShortMLScores>;
@@ -94,6 +133,8 @@ enum CentEstimator {
 };
 
 struct derivedlambdakzeroanalysis {
+  Produces<o2::aod::V0TOFinfo> v0TOFinfo;
+
   HistogramRegistry histos{"Histos", {}, OutputObjHandlingPolicy::AnalysisObject};
 
   bool isRun3;
@@ -115,6 +156,7 @@ struct derivedlambdakzeroanalysis {
   Configurable<bool> doTOFQA{"doTOFQA", false, "do TOF QA histograms"};
   Configurable<int> doDetectPropQA{"doDetectPropQA", 0, "do Detector/ITS map QA: 0: no, 1: 4D, 2: 5D with mass; 3: plain in 3D"};
   Configurable<bool> doEtaPhiQA{"doEtaPhiQA", false, "do Eta/Phi QA histograms"};
+  Configurable<bool> fillV0infoTable{"fillV0infoTable", false, "fill V0 info table for TOF matching QA (only filled for candidates passing the topological selection)"};
 
   Configurable<bool> doPlainTopoQA{"doPlainTopoQA", true, "do simple 1D QA of candidates"};
   Configurable<float> qaMinPt{"qaMinPt", 0.0f, "minimum pT for QA plots"};
@@ -1728,6 +1770,23 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("K0Short/h5dPosPhiVsEta"), centrality, v0.positivept(), v0.mK0Short(), v0.positivephi(), v0.positiveeta());
         histos.fill(HIST("K0Short/h5dNegPhiVsEta"), centrality, v0.negativept(), v0.mK0Short(), v0.negativephi(), v0.negativeeta());
       }
+      // fill V0 info table if requested
+      if (fillV0infoTable) {
+        v0TOFinfo(v0.mK0Short(),
+                  pt,
+                  v0.eta(),
+                  v0.phi(),
+                  v0.yK0Short(),
+                  v0.v0radius(),
+                  v0.v0cosPA(),
+                  v0.dcaV0daughters(),
+                  v0.dcapostopv(),
+                  v0.dcanegtopv(),
+                  posTrackExtra.tpcNSigmaPi(),
+                  negTrackExtra.tpcNSigmaPi(),
+                  v0.tofNSigmaK0PiPlus(),
+                  v0.tofNSigmaK0PiMinus());
+      }
       nK0Shorts++;
     }
     if (passLambdaSelections && analyseLambda) {
@@ -1813,6 +1872,23 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("Lambda/h5dPosPhiVsEta"), centrality, v0.positivept(), v0.mLambda(), v0.positivephi(), v0.positiveeta());
         histos.fill(HIST("Lambda/h5dNegPhiVsEta"), centrality, v0.negativept(), v0.mLambda(), v0.negativephi(), v0.negativeeta());
       }
+      // fill V0 info table if requested
+      if (fillV0infoTable) {
+        v0TOFinfo(v0.mLambda(),
+                  pt,
+                  v0.eta(),
+                  v0.phi(),
+                  v0.yLambda(),
+                  v0.v0radius(),
+                  v0.v0cosPA(),
+                  v0.dcaV0daughters(),
+                  v0.dcapostopv(),
+                  v0.dcanegtopv(),
+                  posTrackExtra.tpcNSigmaPr(),
+                  negTrackExtra.tpcNSigmaPi(),
+                  v0.tofNSigmaLaPr(),
+                  v0.tofNSigmaLaPi());
+      }
       nLambdas++;
     }
     if (passAntiLambdaSelections && analyseAntiLambda) {
@@ -1897,6 +1973,23 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("AntiLambda/h5dV0PhiVsEta"), centrality, pt, v0.mAntiLambda(), v0.phi(), v0.eta());
         histos.fill(HIST("AntiLambda/h5dPosPhiVsEta"), centrality, v0.positivept(), v0.mAntiLambda(), v0.positivephi(), v0.positiveeta());
         histos.fill(HIST("AntiLambda/h5dNegPhiVsEta"), centrality, v0.negativept(), v0.mAntiLambda(), v0.negativephi(), v0.negativeeta());
+      }
+      // fill V0 info table if requested
+      if (fillV0infoTable) {
+        v0TOFinfo(v0.mAntiLambda(),
+                  pt,
+                  v0.eta(),
+                  v0.phi(),
+                  v0.yLambda(),
+                  v0.v0radius(),
+                  v0.v0cosPA(),
+                  v0.dcaV0daughters(),
+                  v0.dcapostopv(),
+                  v0.dcanegtopv(),
+                  posTrackExtra.tpcNSigmaPi(),
+                  negTrackExtra.tpcNSigmaPr(),
+                  v0.tofNSigmaALaPi(),
+                  v0.tofNSigmaALaPr());
       }
       nAntiLambdas++;
     }
