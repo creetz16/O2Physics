@@ -901,6 +901,8 @@ struct derivedlambdakzeroanalysis {
         histos.add("h3dMassLambdaDG", "h3dMassLambdaDG", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPt, axisConfigurations.axisLambdaMass});
       }
       if (doTPCQA) {
+        histos.add("Lambda/h2dPosNsigmaTPC", "h2dPosNsigmaTPC", kTH2D, {axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTPC});
+        histos.add("Lambda/h2dNegNsigmaTPC", "h2dNegNsigmaTPC", kTH2D, {axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTPC});
         histos.add("Lambda/h3dPosNsigmaTPC", "h3dPosNsigmaTPC", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTPC});
         histos.add("Lambda/h3dNegNsigmaTPC", "h3dNegNsigmaTPC", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTPC});
         histos.add("Lambda/h3dPosTPCsignal", "h3dPosTPCsignal", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPtCoarse, axisConfigurations.axisTPCsignal});
@@ -915,6 +917,8 @@ struct derivedlambdakzeroanalysis {
         histos.add("Lambda/h3dNegTPCsignalVsTrackPt", "h3dNegTPCsignalVsTrackPt", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPtCoarse, axisConfigurations.axisTPCsignal});
       }
       if (doTOFQA) {
+        histos.add("Lambda/h2dPosNsigmaTOF", "h2dPosNsigmaTOF", kTH2D, {axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTOF});
+        histos.add("Lambda/h2dNegNsigmaTOF", "h2dNegNsigmaTOF", kTH2D, {axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTOF});
         histos.add("Lambda/h3dPosNsigmaTOF", "h3dPosNsigmaTOF", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTOF});
         histos.add("Lambda/h3dNegNsigmaTOF", "h3dNegNsigmaTOF", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPtCoarse, axisConfigurations.axisNsigmaTOF});
         histos.add("Lambda/h3dPosTOFdeltaT", "h3dPosTOFdeltaT", kTH3D, {axisConfigurations.axisCentrality, axisConfigurations.axisPtCoarse, axisConfigurations.axisTOFdeltaT});
@@ -1840,6 +1844,8 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("Lambda/h3dNegativeTPCcrossedRows"), centrality, pt, negTrackExtra.tpcCrossedRows());
       }
       if (doTPCQA) {
+        histos.fill(HIST("Lambda/h2dPosNsigmaTPC"), pt, posTrackExtra.tpcNSigmaPr());
+        histos.fill(HIST("Lambda/h2dNegNsigmaTPC"), pt, negTrackExtra.tpcNSigmaPi());
         histos.fill(HIST("Lambda/h3dPosNsigmaTPC"), centrality, pt, posTrackExtra.tpcNSigmaPr());
         histos.fill(HIST("Lambda/h3dNegNsigmaTPC"), centrality, pt, negTrackExtra.tpcNSigmaPi());
         histos.fill(HIST("Lambda/h3dPosTPCsignal"), centrality, pt, posTrackExtra.tpcSignal());
@@ -1854,6 +1860,8 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("Lambda/h3dNegTPCsignalVsTrackPt"), centrality, v0.negativept(), negTrackExtra.tpcSignal());
       }
       if (doTOFQA) {
+        histos.fill(HIST("Lambda/h2dPosNsigmaTOF"), pt, v0.tofNSigmaLaPr());
+        histos.fill(HIST("Lambda/h2dNegNsigmaTOF"), pt, v0.tofNSigmaLaPi());
         histos.fill(HIST("Lambda/h3dPosNsigmaTOF"), centrality, pt, v0.tofNSigmaLaPr());
         histos.fill(HIST("Lambda/h3dNegNsigmaTOF"), centrality, pt, v0.tofNSigmaLaPi());
         histos.fill(HIST("Lambda/h3dPosTOFdeltaT"), centrality, pt, v0.posTOFDeltaTLaPr());
