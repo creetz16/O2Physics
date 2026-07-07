@@ -128,6 +128,13 @@ DECLARE_SOA_COLUMN(RadiusDCA, radiusDCA, float);                             //!
 DECLARE_SOA_COLUMN(PhiDCA, phiDCA, float);                                   //! SV radius in x-y plane calculated by dcaFitter
 DECLARE_SOA_COLUMN(PosZDCA, poszDCA, float);                                 //! z position of SV calculated by dcaFitter
 DECLARE_SOA_COLUMN(TrackedClSize, trackedClSize, float);                     //! average ITS cluster size (if tracked)
+
+// extra table info for 3body mixing with Monte Carlo
+DECLARE_SOA_COLUMN(Radius, radius, float);
+DECLARE_SOA_COLUMN(Phi, phi, float);
+DECLARE_SOA_COLUMN(SelFlag, selFlag, bool);
+DECLARE_SOA_COLUMN(TOFNSigmaDeuteron, tofNSigmaDeuteron, float);
+
 } // namespace reduceddecay3body
 
 DECLARE_SOA_TABLE(RedDecay3Bodys, "AOD", "REDDECAY3BODY", //! reduced 3-body decay table
@@ -137,6 +144,12 @@ DECLARE_SOA_TABLE(Red3BodyInfo, "AOD", "RED3BODYINFO", //! joinable with RedDeca
                   reduceddecay3body::RadiusKF, reduceddecay3body::PhiKF, reduceddecay3body::PosZKF,
                   reduceddecay3body::RadiusDCA, reduceddecay3body::PhiDCA, reduceddecay3body::PosZDCA,
                   reduceddecay3body::TrackedClSize);
+
+DECLARE_SOA_TABLE(Decay3BodyExtra, "AOD", "D3BEXTRA", // joinable with Vtx3BodyDatas
+                  reduceddecay3body::Radius,
+                  reduceddecay3body::Phi,
+                  reduceddecay3body::SelFlag,
+                  reduceddecay3body::TOFNSigmaDeuteron);
 
 } // namespace o2::aod
 

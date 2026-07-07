@@ -97,6 +97,7 @@ using TracksExtPIDIUwithEvTimes = soa::Join<aod::TracksIU, aod::TracksExtra, aod
 using TracksExtPIDIUwithEvTimesLabeled = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::pidTPCFullPr, aod::pidTPCFullPi, aod::pidTPCFullDe, aod::EvTimeTOFFT0ForTrack, aod::McTrackLabels>;
 
 using ColswithEvTimes = o2::soa::Join<aod::Collisions, aod::EvSels, aod::EvTimeTOFFT0>;
+using ColswithEvTimesMults = o2::soa::Join<aod::Collisions, aod::EvSels, aod::EvTimeTOFFT0, aod::PVMults>;
 using ColswithEvTimesLabeled = o2::soa::Join<aod::Collisions, aod::EvSels, aod::EvTimeTOFFT0, aod::McCollisionLabels>;
 
 struct decay3bodyBuilder {
@@ -262,6 +263,7 @@ struct decay3bodyBuilder {
   o2::aod::pidtofgeneric::TOFCalibConfig mTOFCalibConfig; // TOF Calib configuration
 
   // 3body mixing
+  using Binning3BodyMC = ColumnBinningPolicy<aod::reduceddecay3body::Radius, aod::reduceddecay3body::Phi>;
   using Binning3BodyKF = ColumnBinningPolicy<aod::reduceddecay3body::RadiusKF, aod::reduceddecay3body::PhiKF>;
   using Binning3BodyDCAfitter = ColumnBinningPolicy<aod::reduceddecay3body::RadiusDCA, aod::reduceddecay3body::PhiDCA>;
 
@@ -276,6 +278,12 @@ struct decay3bodyBuilder {
   std::vector<bool> isTriggeredCollision;
   // MC info
   std::vector<bool> isGoodCollision;
+
+  // collision filter
+  Filter collisionZVtxFilter = (o2::aod::collision::posZ >= 10.0f || o2::aod::collision::posZ <= -10.0f);
+  Filter collisionSel8Filter = o2::aod::evsel::sel8 == true;
+  // decay3body filter for MC mixing
+  Filter triggerFilter = o2::aod::reduceddecay3body::selFlag == true;
 
   void init(InitContext& initContext)
   {
@@ -378,6 +386,12 @@ struct decay3bodyBuilder {
     if (doprocessMonteCarlo) {
       LOGF(info, " ===> process function enabled: processMonteCarlo");
     }
+    if (doprocessMonteCarlo3bodyMixing) {
+      LOGF(info, " ===> process function enabled: processMonteCarlo3bodyMixing");
+    }
+    if (doprocessMonteCarlo3bodyMixing) {
+      LOGF(fatal, "Monte Carlo 3body mixing enabled without producing extra table. Please enable processProduceExtraTable in addition.");
+    }
 
     // list enabled tables
     for (int i = 0; i < nTables; i++) {
@@ -440,7 +454,7 @@ struct decay3bodyBuilder {
     }
 
     // Add histograms separately for different process functions
-    if (doprocessRealData == true || doprocessMonteCarlo == true) {
+    if (doprocessRealData == true || doprocessMonteCarlo == true || doprocessMonteCarlo3bodyMixing == true) {
       auto hEventCounter = registry.add<TH1>("Counters/hEventCounter", "hEventCounter", HistType::kTH1D, {{2, 0.0f, 2.0f}});
       hEventCounter->GetXaxis()->SetBinLabel(1, "all");
       hEventCounter->GetXaxis()->SetBinLabel(2, "selected");
@@ -454,7 +468,7 @@ struct decay3bodyBuilder {
       hMcEventCounter->LabelsOption("v");
     }
 
-    if (doprocessRealData == true || doprocessRealDataReduced == true || doprocessMonteCarlo == true) {
+    if (doprocessRealData == true || doprocessRealDataReduced == true || doprocessMonteCarlo == true || doprocessMonteCarlo3bodyMixing == true) {
       if (doTrackQA) { // histograms for all daughter tracks of (selected) 3body candidates
         registry.add("QA/Tracks/hTrackProtonTPCNcls", "hTrackProtonTPCNcls", HistType::kTH1F, {{152, 0, 152, "# TPC clusters"}});
         registry.add("QA/Tracks/hTrackPionTPCNcls", "hTrackPionTPCNcls", HistType::kTH1F, {{152, 0, 152, "# TPC clusters"}});
@@ -484,7 +498,7 @@ struct decay3bodyBuilder {
       }
     }
 
-    if (doprocessRealDataReduced3bodyMixing == true) {
+    if (doprocessRealDataReduced3bodyMixing == true || doprocessMonteCarlo3bodyMixing == true) {
       auto h3bodyCombinationCounter = registry.add<TH1>("Mixing/h3bodyCombinationCounter", "h3bodyCombinationCounter", HistType::kTH1D, {{4, 0.0f, 4.0f}});
       h3bodyCombinationCounter->GetXaxis()->SetBinLabel(1, "total");
       h3bodyCombinationCounter->GetXaxis()->SetBinLabel(2, "not same collision");
@@ -493,6 +507,19 @@ struct decay3bodyBuilder {
       h3bodyCombinationCounter->LabelsOption("v");
       registry.add("Mixing/hDecay3BodyRadiusPhi", "hDecay3BodyRadiusPhi", HistType::kTH2F, {mixingOpts.bins3BodyRadius, mixingOpts.bins3BodyPhi});
       registry.add("Mixing/hDecay3BodyPosZ", "hDecay3BodyPosZ", HistType::kTH1F, {mixingOpts.bins3BodyPosZ});
+    }
+
+    if (doprocessMonteCarloEventMixing == true) {
+      // auto hPairCounterMixing = registry.add<TH1>("QA/EM/hPairCounterMixing", "hPairCounterMixing", HistType::kTH1F, {{3, 0.0f, 3.0f}});
+      // hPairCounterMixing->GetXaxis()->SetBinLabel(1, "total");
+      // hPairCounterMixing->GetXaxis()->SetBinLabel(2, "sel8");
+      // hPairCounterMixing->GetXaxis()->SetBinLabel(3, "vertexZ");
+      // hPairCounterMixing->LabelsOption("v");
+      // auto hCombinationCounterMixing = registry.add<TH1>("QA/EM/hCombinationCounterMixing", "hCombinationCounterMixing", HistType::kTH1F, {{3, 0.0f, 3.0f}});
+      // hCombinationCounterMixing->GetXaxis()->SetBinLabel(1, "total");
+      // hCombinationCounterMixing->GetXaxis()->SetBinLabel(2, "bach sign/ID");
+      // hCombinationCounterMixing->GetXaxis()->SetBinLabel(3, "bach pT");
+      // hCombinationCounterMixing->LabelsOption("v");
     }
   }
 
@@ -969,8 +996,8 @@ struct decay3bodyBuilder {
 
   // ______________________________________________________________
   // function to build mixed decay3body candidates
-  template <class TRedCollisions, class TRedTracks, typename TRedDecay3Bodys, typename TBinningType>
-  void buildMixedCandidates(TRedDecay3Bodys const& decay3bodys, TBinningType const& binningType)
+  template <class TCollisions, class TTracks, typename TBCs, typename TDecay3Bodys, typename TBinningType>
+  void buildMixedCandidates(TBCs const&, TDecay3Bodys const& decay3bodys, TBinningType const& binningType)
   {
     if (!mEnabledTables[kVtx3BodyDatas]) {
       return; // don't do if no request for decay3bodys in place
@@ -978,12 +1005,12 @@ struct decay3bodyBuilder {
 
     // Strictly upper index policy for decay3body objects binned by radius, phi
     for (const auto& [decay3body0, decay3body1] : selfPairCombinations(binningType, mixingOpts.n3bodyMixing, -1, decay3bodys)) {
-      auto trackPos0 = decay3body0.template track0_as<TRedTracks>();
-      auto trackNeg0 = decay3body0.template track1_as<TRedTracks>();
-      auto trackDeuteron0 = decay3body0.template track2_as<TRedTracks>();
-      auto trackPos1 = decay3body1.template track0_as<TRedTracks>();
-      auto trackNeg1 = decay3body1.template track1_as<TRedTracks>();
-      auto trackDeuteron1 = decay3body1.template track2_as<TRedTracks>();
+      auto trackPos0 = decay3body0.template track0_as<TTracks>();
+      auto trackNeg0 = decay3body0.template track1_as<TTracks>();
+      auto trackDeuteron0 = decay3body0.template track2_as<TTracks>();
+      auto trackPos1 = decay3body1.template track0_as<TTracks>();
+      auto trackNeg1 = decay3body1.template track1_as<TTracks>();
+      auto trackDeuteron1 = decay3body1.template track2_as<TTracks>();
 
       // assign tracks
       auto trackProton0 = trackPos0;
@@ -1008,12 +1035,28 @@ struct decay3bodyBuilder {
       registry.fill(HIST("Mixing/h3bodyCombinationCounter"), 1.5);
 
       // collision vertex selection
-      auto collision0 = decay3body0.template collision_as<TRedCollisions>();
-      auto collision1 = decay3body1.template collision_as<TRedCollisions>();
+      auto collision0 = decay3body0.template collision_as<TCollisions>();
+      auto collision1 = decay3body1.template collision_as<TCollisions>();
 
       // get b_z value for each collision (from CCDB or cache) and cache it for that run number
-      float magFieldCol0 = getMagFieldFromRunNumber(collision0.runNumber());
-      float magFieldCol1 = getMagFieldFromRunNumber(collision1.runNumber());
+      float magFieldCol0;
+      float magFieldCol1;
+      int runNumberCol0;
+      int runNumberCol1;
+      if constexpr (soa::is_table<TBCs>) {
+        auto bc0 = collision0.template bc_as<TBCs>();
+        auto bc1 = collision1.template bc_as<TBCs>();
+        runNumberCol0 = bc0.runNumber();
+        runNumberCol1 = bc1.runNumber();
+        magFieldCol0 = getMagFieldFromRunNumber(runNumberCol0);
+        magFieldCol1 = getMagFieldFromRunNumber(runNumberCol1);
+      }
+      else {
+        runNumberCol0 = collision0.runNumber();
+        runNumberCol1 = collision1.runNumber();
+        magFieldCol0 = getMagFieldFromRunNumber(runNumberCol0);
+        magFieldCol1 = getMagFieldFromRunNumber(runNumberCol1);
+      }
 
       // only combine if collision similar in VtxZ
       if (mixingOpts.selectPVPosZ3bodyMixing && std::abs(collision0.posZ() - collision1.posZ()) > mixingOpts.maxDeltaPVPosZ3bodyMixing) {
@@ -1041,21 +1084,32 @@ struct decay3bodyBuilder {
       }
       registry.fill(HIST("Mixing/h3bodyCombinationCounter"), 3.5);
 
+      // set deuteron TOF PID
+      float tofNSigmaDeuteron0;
+      float tofNSigmaDeuteron1;
+      if constexpr (soa::is_table<TBCs>) { // in case of MC mixing, TOF deuteron info is saved in extra decay3body table
+        tofNSigmaDeuteron0 = decay3body0.tofNSigmaDeuteron();
+        tofNSigmaDeuteron1 = decay3body1.tofNSigmaDeuteron();
+      } else { // in case of real reduced data mixing, TOF deuteron info is saved in reduced track table
+        tofNSigmaDeuteron0 = trackDeuteron0.tofNSigmaDe();
+        tofNSigmaDeuteron1 = trackDeuteron1.tofNSigmaDe();
+      }
+
       // candidate analysis
       // mix deuteron
       if (mixingOpts.mixingType == 0) {
-        doMixing(collision0, trackProton0, trackPion0, trackDeuteron1, magFieldCol0);
-        doMixing(collision1, trackProton1, trackPion1, trackDeuteron0, magFieldCol1);
+        doMixing(collision0, trackProton0, trackPion0, trackDeuteron1, magFieldCol0, runNumberCol0, tofNSigmaDeuteron1);
+        doMixing(collision1, trackProton1, trackPion1, trackDeuteron0, magFieldCol1, runNumberCol1, tofNSigmaDeuteron0);
       }
       // mix proton
       if (mixingOpts.mixingType == 1) {
-        doMixing(collision0, trackProton1, trackPion0, trackDeuteron0, magFieldCol0);
-        doMixing(collision1, trackProton0, trackPion1, trackDeuteron1, magFieldCol1);
+        doMixing(collision0, trackProton1, trackPion0, trackDeuteron0, magFieldCol0, runNumberCol0, tofNSigmaDeuteron0);
+        doMixing(collision1, trackProton0, trackPion1, trackDeuteron1, magFieldCol1, runNumberCol1, tofNSigmaDeuteron1);
       }
       // mix pion
       if (mixingOpts.mixingType == 2) {
-        doMixing(collision0, trackProton0, trackPion1, trackDeuteron0, magFieldCol0);
-        doMixing(collision1, trackProton1, trackPion0, trackDeuteron1, magFieldCol1);
+        doMixing(collision0, trackProton0, trackPion1, trackDeuteron0, magFieldCol0, runNumberCol0, tofNSigmaDeuteron0);
+        doMixing(collision1, trackProton1, trackPion0, trackDeuteron1, magFieldCol1, runNumberCol1, tofNSigmaDeuteron1);
       }
     } // end decay3body combinations loop
   }
@@ -1161,13 +1215,13 @@ struct decay3bodyBuilder {
   // ______________________________________________________________
   // function to build mixed 3body candidate from selected tracks
   template <typename TCollision, typename TTrack>
-  void doMixing(TCollision const& collision, TTrack const& trackProton, TTrack const& trackPion, TTrack const& trackDeuteron, float magField)
+  void doMixing(TCollision const& collision, TTrack const& trackProton, TTrack const& trackPion, TTrack const& trackDeuteron, float magField, float runNumber, float tofNsigmaDe)
   {
     // set vertexers and propagator with correct mag field of this collision (only if run number changed compared to previous candidate build)
-    initFittersWithMagField(collision.runNumber(), magField);
+    initFittersWithMagField(runNumber, magField);
     if (helper.buildDecay3BodyCandidate(collision, trackProton, trackPion, trackDeuteron,
                                         -1 /*decay3bodyIndex*/,
-                                        trackDeuteron.tofNSigmaDe(),
+                                        tofNsigmaDe,
                                         0 /*trackedClSize*/,
                                         decay3bodyBuilderOpts.useKFParticle,
                                         decay3bodyBuilderOpts.kfSetTopologicalConstraint,
@@ -1353,10 +1407,10 @@ struct decay3bodyBuilder {
 
     if (decay3bodyBuilderOpts.useKFParticle) {
       Binning3BodyKF binningOnRadPhiKF{{mixingOpts.bins3BodyRadius, mixingOpts.bins3BodyPhi}, true};
-      buildMixedCandidates<aod::RedCollisions, aod::RedIUTracks>(decay3bodys, binningOnRadPhiKF);
+      buildMixedCandidates<aod::RedCollisions, aod::RedIUTracks>(static_cast<TObject*>(nullptr), decay3bodys, binningOnRadPhiKF);
     } else {
       Binning3BodyDCAfitter binningOnRadPhiDCA{{mixingOpts.bins3BodyRadius, mixingOpts.bins3BodyPhi}, true};
-      buildMixedCandidates<aod::RedCollisions, aod::RedIUTracks>(decay3bodys, binningOnRadPhiDCA);
+      buildMixedCandidates<aod::RedCollisions, aod::RedIUTracks>(static_cast<TObject*>(nullptr), decay3bodys, binningOnRadPhiDCA);
     }
   }
 
@@ -1397,10 +1451,82 @@ struct decay3bodyBuilder {
                                                       mcCollisions); // MC collision table
   }
 
+  void processMonteCarlo3bodyMixing(soa::Filtered<ColswithEvTimes> const& collisions,                                    // selected events (sel8 + vtx_z)
+                                    soa::Filtered<soa::Join<aod::Decay3Bodys, aod::Decay3BodyExtra>> const& decay3bodys, // only triggered decay3bodys
+                                    TracksExtPIDIUwithEvTimes const&,
+                                    aod::BCsWithTimestamps const& bcs)
+  {
+    // treat MC as data for 3body mixing with AO2Ds instead of reduced data
+    // directly mix all decay3bodys in on dataframe using the buildMixedCandidates function
+    // before mixing, I need to get the phi and radius of decay3body object: smiliar to in reducedCreator?
+    // before mixing, apply event selections as in reduced creator
+
+    // initialise CCDB from BCs
+    if (!initCCDB(bcs, collisions)) {
+      LOG(info) << "CCDB initialisation failed, skipping candidate building." << std::endl;
+      return;
+    }
+
+    // vertex QA
+    for (const auto& collision : collisions) {
+      registry.fill(HIST("QA/Event/hAllSelEventsVtxZ"), collision.posZ());
+    }
+
+    // binning for mixing
+    auto xAxis = registry.get<TH2>(HIST("Mixing/hDecay3BodyRadiusPhi"))->GetXaxis();
+    auto yAxis = registry.get<TH2>(HIST("Mixing/hDecay3BodyRadiusPhi"))->GetYaxis();
+
+    for (const auto& decay3body : decay3bodys) {
+      int bin_Radius, bin_Phi;
+      bin_Radius = xAxis->FindBin(decay3body.radius());
+      bin_Phi = yAxis->FindBin(decay3body.phi());
+      // registry.fill(HIST("Mixing/hDecay3BodyPosZ"), decay3body.poszKF());
+      registry.fill(HIST("Mixing/hDecay3BodyRadiusPhi"), xAxis->GetBinCenter(bin_Radius), yAxis->GetBinCenter(bin_Phi));
+    }
+
+    // do mixing
+    Binning3BodyMC binningOnRadPhi{{mixingOpts.bins3BodyRadius, mixingOpts.bins3BodyPhi}, true};
+    buildMixedCandidates<ColswithEvTimes, TracksExtPIDIUwithEvTimes>(bcs, decay3bodys, binningOnRadPhi);
+  }
+
+  void processMonteCarloEventMixing(ColswithEvTimesMults const& collisions, 
+                                    TracksExtPIDIUwithEvTimes const&, 
+                                    aod::Decay3Bodys const& decay3bodys, 
+                                    aod::BCsWithTimestamps const&)
+  {
+    // treat MC as data for event mixing 
+    // mix events with same posZ and multiplicity binning as for decay3body mixing
+    // I need to mimic the radius and phi binning of the mixed decay3bodys
+    // Then in the end apply trigger and analysis selections
+
+    // only do deuteron mixing as check now: deuteron + pr,pi
+
+    // initialise CCDB from BCs
+    if (!initCCDB(bcs, collisions)) {
+      LOG(info) << "CCDB initialisation failed, skipping candidate building." << std::endl;
+      return;
+    }
+
+    // vertex QA
+    for (const auto& collision : collisions) {
+      registry.fill(HIST("QA/Event/hAllSelEventsVtxZ"), collision.posZ());
+    }
+
+    BinningCollisions binningOnPosMult{{mixingOptsMc.binsPosZ, mixingOptsMc.binsMult}, true};
+    // Strictly upper index policy for decay3body objects binned by radius, phi
+    for (const auto& [collisions0, collisions1] : selfPairCombinations(binningOnPosMult, mixingOptsMc.n3bodyMixing, -1, collisions)) {
+
+    }
+    
+
+  }
+
   PROCESS_SWITCH(decay3bodyBuilder, processRealData, "process real data", true);
   PROCESS_SWITCH(decay3bodyBuilder, processRealDataReduced, "process real reduced data", false);
-  PROCESS_SWITCH(decay3bodyBuilder, processRealDataReduced3bodyMixing, "process real reduced data", false);
-  PROCESS_SWITCH(decay3bodyBuilder, processMonteCarlo, "process monte carlo", false);
+  PROCESS_SWITCH(decay3bodyBuilder, processRealDataReduced3bodyMixing, "process 3body mixing with real reduced data", false);
+  PROCESS_SWITCH(decay3bodyBuilder, processMonteCarlo, "process Monte Carlo", false);
+  PROCESS_SWITCH(decay3bodyBuilder, processMonteCarlo3bodyMixing, "process 3body mixing with Monte Carlo", false);
+  PROCESS_SWITCH(decay3bodyBuilder, processMonteCarloEventMixing, "process event mixing with Monte Carlo", false);
 };
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)

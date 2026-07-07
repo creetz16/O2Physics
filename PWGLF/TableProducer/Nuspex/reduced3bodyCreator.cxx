@@ -70,10 +70,10 @@ o2::common::core::MetadataHelper metadataInfo;
 using FullTracksExtIU = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU>;
 using FullTracksExtPIDIU = soa::Join<FullTracksExtIU, aod::pidTPCFullPr, aod::pidTPCFullPi, aod::pidTPCFullDe>;
 
-using ColwithEvTimes = o2::soa::Join<aod::Collisions, aod::EvSels, aod::EvTimeTOFFT0>;
-using ColwithEvTimesMultsCents = o2::soa::Join<ColwithEvTimes, aod::PVMults, aod::CentFT0Cs>;
-using TrackExtIUwithEvTimes = soa::Join<FullTracksExtIU, aod::EvTimeTOFFT0ForTrack>;
-using TrackExtPIDIUwithEvTimes = soa::Join<FullTracksExtPIDIU, aod::EvTimeTOFFT0ForTrack>;
+using ColswithEvTimes = o2::soa::Join<aod::Collisions, aod::EvSels, aod::EvTimeTOFFT0>;
+using ColswithEvTimesMultsCents = o2::soa::Join<ColswithEvTimes, aod::PVMults, aod::CentFT0Cs>;
+using TracksExtIUwithEvTimes = soa::Join<FullTracksExtIU, aod::EvTimeTOFFT0ForTrack>;
+using TracksExtPIDIUwithEvTimes = soa::Join<FullTracksExtPIDIU, aod::EvTimeTOFFT0ForTrack>;
 
 struct reduced3bodyCreator {
 
@@ -83,13 +83,14 @@ struct reduced3bodyCreator {
   Produces<aod::RedDecay3Bodys> reducedDecay3Bodys;
   Produces<aod::Red3BodyInfo> reduced3BodyInfo;
   Produces<aod::StoredRedIUTracks> reducedFullTracksPIDIU;
+  Produces<aod::Decay3BodyExtra> extraTable;
 
   Service<o2::ccdb::BasicCCDBManager> ccdb;
   Zorro zorro;
   OutputObj<ZorroSummary> zorroSummary{"zorroSummary"};
 
   o2::vertexing::DCAFitterN<3> fitter3body;
-  o2::aod::pidtofgeneric::TofPidNewCollision<TrackExtPIDIUwithEvTimes::iterator> bachelorTOFPID;
+  o2::aod::pidtofgeneric::TofPidNewCollision<TracksExtPIDIUwithEvTimes::iterator> bachelorTOFPID;
 
   Configurable<bool> disableITSROFCut{"disableITSROFCut", false, "Disable ITS ROF border cut"};
   // CCDB options
@@ -243,7 +244,7 @@ struct reduced3bodyCreator {
     return true;
   }
 
-  void process(ColwithEvTimesMultsCents const& collisions, TrackExtPIDIUwithEvTimes const&, aod::Decay3Bodys const& decay3bodys, aod::Tracked3Bodys const& tracked3bodys, aod::BCsWithTimestamps const&)
+  void processProduceRealReducedData(ColswithEvTimesMultsCents const& collisions, TracksExtPIDIUwithEvTimes const&, aod::Decay3Bodys const& decay3bodys, aod::Tracked3Bodys const& tracked3bodys, aod::BCsWithTimestamps const&)
   {
     std::vector<bool> isTriggeredCollision(collisions.size(), false);
 
@@ -301,7 +302,7 @@ struct reduced3bodyCreator {
     // Create reduced table
     for (const auto& d3body : decay3bodys) {
 
-      auto collision = d3body.template collision_as<ColwithEvTimesMultsCents>();
+      auto collision = d3body.template collision_as<ColswithEvTimesMultsCents>();
 
       // event selection
       if (!collision.selection_bit(aod::evsel::kNoITSROFrameBorder) && !disableITSROFCut) { // ITS ROF boarder cut if not disabled
@@ -336,13 +337,13 @@ struct reduced3bodyCreator {
       const auto collisionIndex = reducedCollisions.lastIndex();
 
       // Save daughter tracks
-      const auto daughter0 = d3body.template track0_as<TrackExtPIDIUwithEvTimes>();
-      const auto daughter1 = d3body.template track1_as<TrackExtPIDIUwithEvTimes>();
-      const auto daughter2 = d3body.template track2_as<TrackExtPIDIUwithEvTimes>();
+      const auto daughter0 = d3body.template track0_as<TracksExtPIDIUwithEvTimes>();
+      const auto daughter1 = d3body.template track1_as<TracksExtPIDIUwithEvTimes>();
+      const auto daughter2 = d3body.template track2_as<TracksExtPIDIUwithEvTimes>();
 
       // TOF PID of bachelor must be calcualted here
       // ----------------------------------------------
-      auto originalcol = daughter2.template collision_as<ColwithEvTimesMultsCents>();
+      auto originalcol = daughter2.template collision_as<ColswithEvTimesMultsCents>();
       double tofNSigmaBach = bachelorTOFPID.GetTOFNSigma(mRespParamsV3, daughter2, originalcol, collision);
       // ----------------------------------------------
 
@@ -415,6 +416,112 @@ struct reduced3bodyCreator {
 
     registry.fill(HIST("hEventCounter"), 2.5, reducedCollisions.lastIndex() + 1);
   }
+
+  void processProduceExtraTable(ColswithEvTimes const&, aod::Decay3Bodys const& decay3bodys, TracksExtPIDIUwithEvTimes const&)
+  {
+    for (const auto& d3body : decay3bodys) {
+
+      bool passedTriggerSelection = false;
+
+      // get collision of decay3body
+      auto collision = d3body.template collision_as<ColswithEvTimes>();
+
+      // Save daughter tracks
+      const auto trackPos = d3body.template track0_as<TracksExtPIDIUwithEvTimes>();
+      const auto trackNeg = d3body.template track1_as<TracksExtPIDIUwithEvTimes>();
+      const auto trackDeuteron = d3body.template track2_as<TracksExtPIDIUwithEvTimes>();
+      auto trackProton = trackPos;
+      auto trackPion = trackNeg;
+      if (trackDeuteron.sign() < 0) {
+        trackProton = trackNeg;
+        trackPion = trackPos;
+      }
+
+      // get trackParCov daughters
+      auto trackParCovProton = getTrackParCov(trackProton);
+      auto trackParCovPion = getTrackParCov(trackPion);
+      auto trackParCovDeuteron = getTrackParCov(trackDeuteron);
+
+      // create KFParticle daughters
+      KFParticle kfpProton, kfpPion, kfpDeuteron;
+      kfpProton = createKFParticleFromTrackParCov(trackParCovProton, trackProton.sign(), constants::physics::MassProton);
+      kfpPion = createKFParticleFromTrackParCov(trackParCovPion, trackPion.sign(), constants::physics::MassPionCharged);
+      kfpDeuteron = createKFParticleFromTrackParCov(trackParCovDeuteron, trackDeuteron.sign(), constants::physics::MassDeuteron);
+
+      // fit 3body vertex and caclulate radius, phi, z position
+      float radius, phi;
+      KFParticle KFHt;
+      // Construct 3body vertex
+      int nDaughters3body = 3;
+      const KFParticle* Daughters3body[3] = {&kfpProton, &kfpPion, &kfpDeuteron};
+      KFHt.SetConstructMethod(2);
+      KFHt.Construct(Daughters3body, nDaughters3body);
+      radius = std::hypot(KFHt.GetX(), KFHt.GetY());
+      phi = std::atan2(KFHt.GetPx(), KFHt.GetPy());
+
+      // transport all daughter tracks to hypertriton vertex
+      float position[3];
+      position[0] = KFHt.GetX();
+      position[1] = KFHt.GetY();
+      position[2] = KFHt.GetZ();
+      kfpProton.TransportToPoint(position);
+      kfpPion.TransportToPoint(position);
+      kfpDeuteron.TransportToPoint(position);
+
+      // get deuteron TOF PID information
+      auto originalcol = trackDeuteron.template collision_as<ColswithEvTimes>();
+      double tofNSigmaDeuteron = bachelorTOFPID.GetTOFNSigma(mRespParamsV3, trackDeuteron, originalcol, collision);
+
+      // get pion DCA to PV
+      float pv[3] = {collision.posX(), collision.posY(), collision.posZ()};
+      float dcaPiToPV = kfpPion.GetDistanceFromVertex(pv);
+
+      // get daughter DCA to SV
+      // deuteron daughter
+      float dcaDeToSV = std::hypot(
+        kfpDeuteron.GetX() - KFHt.GetX(),
+        kfpDeuteron.GetY() - KFHt.GetY(),
+        kfpDeuteron.GetZ() - KFHt.GetZ());
+      // proton daughter
+      float dcaPrToSV = std::hypot(
+        kfpProton.GetX() - KFHt.GetX(),
+        kfpProton.GetY() - KFHt.GetY(),
+        kfpProton.GetZ() - KFHt.GetZ());
+      // pion daughter
+      float dcaPiToSV = std::hypot(
+        kfpPion.GetX() - KFHt.GetX(),
+        kfpPion.GetY() - KFHt.GetY(),
+        kfpPion.GetZ() - KFHt.GetZ());
+
+      // DCA daughters to SV average of quadratic sum
+      float daughterDCAtoSVaverage = (dcaPrToSV * dcaPrToSV + dcaPiToSV * dcaPiToSV + dcaDeToSV * dcaDeToSV) / 3;
+
+      // hypertriton pT, rapidity, mass, PA, ctau
+      float pT = RecoDecay::pt(std::array{KFHt.GetPx(), KFHt.GetPy(), KFHt.GetPz()});
+      float rapidity = RecoDecay::y(std::array{KFHt.GetPx(), KFHt.GetPy(), KFHt.GetPz()}, o2::constants::physics::MassHyperTriton);
+      float cpa = RecoDecay::cpa(std::array{collision.posX(), collision.posY(), collision.posZ()}, std::array{KFHt.GetX(), KFHt.GetY(), KFHt.GetZ()}, std::array{KFHt.GetPx(), KFHt.GetPy(), KFHt.GetPz()});
+      float mass, massErr;
+      KFHt.GetMass(mass, massErr);
+      float P = RecoDecay::sqrtSumOfSquares(KFHt.GetPx(), KFHt.GetPy(), KFHt.GetPz());
+      float ctau = std::sqrt(std::pow(KFHt.GetX() - collision.posX(), 2) + std::pow(KFHt.GetY() - collision.posY(), 2) + std::pow(KFHt.GetZ() - collision.posZ(), 2)) / (P + 1E-10) * o2::constants::physics::MassHyperTriton;
+
+      // store trigger information to apply trigger selection before mixing
+      if (trackDeuteron.tpcNClsFound() < 100 && trackProton.tpcNClsFound() < 90 && trackPion.tpcNClsFound() < 70                                                       // TPC clusters
+          && std::fabs(trackDeuteron.eta()) < 1.0 && std::fabs(trackProton.eta()) < 1.0 && std::fabs(trackPion.eta()) < 1.0                                            // track eta
+          && std::fabs(trackDeuteron.tpcNSigmaDe()) < 5.0 && std::fabs(trackProton.tpcNSigmaPr()) < 5.0 && std::fabs(trackPion.tpcNSigmaPi()) < 5.0              // TPC PID
+          && trackDeuteron.pt() > 0.6 && trackDeuteron.pt() < 10.0 && trackProton.pt() > 0.3 && trackProton.pt() < 5.0 && trackPion.pt() > 0.1 && trackPion.pt() < 1.2 // track pt
+          && dcaPiToPV < 0.05                                                                                                                                          // pion DCA to PV
+          && daughterDCAtoSVaverage < 0.15 && pT > 1.5 && rapidity < 1.0 && cpa > 0.9995 && mass > 2.96 && mass < 3.04 && ctau > 40.0) {
+        passedTriggerSelection = true;
+      }
+
+      // fill extra table with radius, phi, and posZ information
+      extraTable(radius, phi, passedTriggerSelection, tofNSigmaDeuteron);
+    } // end decay3body loop
+  }
+
+  PROCESS_SWITCH(reduced3bodyCreator, processProduceRealReducedData, "Process to produce reduced tables with real data", true);
+  PROCESS_SWITCH(reduced3bodyCreator, processProduceExtraTable, "Process to produce extra table with information needed for 3body mixing with Monte Carlo", false);
 };
 
 struct reduced3bodyInitializer {
