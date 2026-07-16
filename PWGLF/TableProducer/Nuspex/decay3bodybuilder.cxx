@@ -93,6 +93,7 @@ static const int defaultParameters[nTablesConst][nParameters]{
   {0}  // McVtx3BodyDatas
 };
 
+using TracksExtFullPIDIU = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::pidTPCFullPr, aod::pidTPCFullPi, aod::pidTPCFullDe, aod::pidTOFDe>;
 using TracksExtPIDIUwithEvTimes = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::pidTPCFullPr, aod::pidTPCFullPi, aod::pidTPCFullDe, aod::EvTimeTOFFT0ForTrack>;
 using TracksExtPIDIUwithEvTimesLabeled = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::pidTPCFullPr, aod::pidTPCFullPi, aod::pidTPCFullDe, aod::EvTimeTOFFT0ForTrack, aod::McTrackLabels>;
 
@@ -218,6 +219,13 @@ struct decay3bodyBuilder {
     Configurable<float> maxDCAZ3Body{"maxDCAZ3Body", 1.0, "Max DCA Z of 3body"};
   } mixingOpts;
 
+  struct : ConfigurableGroup {
+    std::string prefix = "mixingOptsMc";
+    Configurable<int> nEventMixing{"nEventMixing", 5, "Number of events to mix"};
+    ConfigurableAxis binsPosZ{"mixingOptsMc.binsPosZ", {10, -10.0f, 10.0f}, "Mixing bins - PV z position"};
+    ConfigurableAxis binsMult{"mixingOptsMc.binsMult", {VARIABLE_WIDTH, 0.0f, 1.0f, 5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 40.0f, 50.0f, 70.0f, 100.0f}, "Mixing bins - PV multiplicity"};
+  }
+
   // Helper struct to contain MC information prior to filling
   struct mc3Bodyinfo {
     int label;
@@ -266,6 +274,7 @@ struct decay3bodyBuilder {
   using Binning3BodyMC = ColumnBinningPolicy<aod::reduceddecay3body::Radius, aod::reduceddecay3body::Phi>;
   using Binning3BodyKF = ColumnBinningPolicy<aod::reduceddecay3body::RadiusKF, aod::reduceddecay3body::PhiKF>;
   using Binning3BodyDCAfitter = ColumnBinningPolicy<aod::reduceddecay3body::RadiusDCA, aod::reduceddecay3body::PhiDCA>;
+  using BinningCollisions = ColumnBinningPolicy<aod::collisions::PosZ, aod::PVMults::MultNTracksPV>;
 
   // skimmed processing
   Zorro zorro;
@@ -1050,8 +1059,7 @@ struct decay3bodyBuilder {
         runNumberCol1 = bc1.runNumber();
         magFieldCol0 = getMagFieldFromRunNumber(runNumberCol0);
         magFieldCol1 = getMagFieldFromRunNumber(runNumberCol1);
-      }
-      else {
+      } else {
         runNumberCol0 = collision0.runNumber();
         runNumberCol1 = collision1.runNumber();
         magFieldCol0 = getMagFieldFromRunNumber(runNumberCol0);
@@ -1489,14 +1497,14 @@ struct decay3bodyBuilder {
     buildMixedCandidates<ColswithEvTimes, TracksExtPIDIUwithEvTimes>(bcs, decay3bodys, binningOnRadPhi);
   }
 
-  void processMonteCarloEventMixing(ColswithEvTimesMults const& collisions, 
-                                    TracksExtPIDIUwithEvTimes const&, 
-                                    aod::Decay3Bodys const& decay3bodys, 
+  void processMonteCarloEventMixing(ColswithEvTimesMults const& collisions,
+                                    TracksExtFullPIDIU const& tracks,
+                                    aod::Decay3Bodys const& decay3bodys,
                                     aod::BCsWithTimestamps const&)
   {
-    // treat MC as data for event mixing 
+    // treat MC as data for event mixing
     // mix events with same posZ and multiplicity binning as for decay3body mixing
-    // I need to mimic the radius and phi binning of the mixed decay3bodys
+    // I need to mimic the radius and phi binning of the mixed decay3bodys --> check position of tracks at SV after vertex fit in helper function
     // Then in the end apply trigger and analysis selections
 
     // only do deuteron mixing as check now: deuteron + pr,pi
@@ -1513,12 +1521,63 @@ struct decay3bodyBuilder {
     }
 
     BinningCollisions binningOnPosMult{{mixingOptsMc.binsPosZ, mixingOptsMc.binsMult}, true};
-    // Strictly upper index policy for decay3body objects binned by radius, phi
-    for (const auto& [collisions0, collisions1] : selfPairCombinations(binningOnPosMult, mixingOptsMc.n3bodyMixing, -1, collisions)) {
 
-    }
-    
+    auto tracksTuple = std::make_tuple(tracks);
+    SameKindPair<aod::Collisions, aod::Tracks, BinningCollisions> pair{binningOnPosMult, mixingOptsMc.nEventMixing, -1, collisions, tracksTuple, &cache}; // indicates that 5 events should be mixed and under/overflow (-1) to be ignored
+    for (auto& [c1, tracks1, c2, tracks2] : pair) {
+      LOGF(info, "Mixed event collisions: (%d, %d)", c1.globalIndex(), c2.globalIndex());
 
+      for (const auto& [tPos, tNeg, tBach] : combinations(CombinationsFullIndexPolicy(tracks1, tracks1, tracks2))) { // which policy do I need?
+        LOGF(info, "Mixed event tracks triplet: (%d, %d, %d) from events (%d, %d), track event: (%d, %d, %d)", tPos.index(), tNeg.index(), tBach.index(), c1.index(), c2.index(), tPos.collision().index(), tNeg.collision().index(), tBach.collision().index());
+        // skip cases where tPos and tNeg are same track (occur due to FullIndexPolicy + fact that tracks1 is used twice in combinations)
+        if (tPos.globalIndex() == tNeg.globalIndex()) {
+          continue;
+        }
+
+        // skip if charges don't add up
+        if (tPos.sign() < 0 || tNeg.sign() > 0) {
+          continue;
+        }
+
+        // assign tracks to ensure correct charge combination for deuteron, proton, and pion
+        auto trackDeuteron = tBach;
+        auto trackProton = tPos;
+        auto trackPion = tNeg;
+        if (trackDeuteron.sign() < 0) {
+          trackProton = tNeg;
+          trackPion = tPos;
+        }
+
+        // candidate analysis
+        // only mixing type 0 (deuteron mixing) implemented for MC event mixing
+        // deuteron TOF PID taken from standard TOF output!! No bias due to secondaty vertexing in this case.
+        // take collision of proton and pion as reference like in decay3body mixing
+        if (helper.buildDecay3BodyCandidate(c1, trackProton, trackPion, trackDeuteron,
+                                            -1 /*decay3bodyIndex*/,
+                                            trackDeuteron.tofNSigmaDe(),
+                                            0 /*trackedClSize*/,
+                                            decay3bodyBuilderOpts.useKFParticle,
+                                            decay3bodyBuilderOpts.kfSetTopologicalConstraint,
+                                            decay3bodyBuilderOpts.useSelections,
+                                            decay3bodyBuilderOpts.useChi2Selection,
+                                            decay3bodyBuilderOpts.useTPCforPion,
+                                            decay3bodyBuilderOpts.acceptTPCOnly,
+                                            decay3bodyBuilderOpts.askOnlyITSMatch,
+                                            decay3bodyBuilderOpts.calculateCovariance,
+                                            true, /*isEventMixing*/
+                                            mixingOpts.doApplySVertexerCuts /*applySVertexerCuts*/)) {
+
+          // check "radius" and "phi" of daughter tracks at vertex to mimic decay3body mixing binning --> HOW?
+          float radiusDeuteron = std::hypot(helper.decay3body.posDeuteron[0], helper.decay3body.posDeuteron[1]);
+
+          // fill analysis tables with built candidate
+          fillAnalysisTables();
+          continue;
+        } else {
+          continue;
+        }
+      } // end combinations loop
+    } // end mixing loop
   }
 
   PROCESS_SWITCH(decay3bodyBuilder, processRealData, "process real data", true);
