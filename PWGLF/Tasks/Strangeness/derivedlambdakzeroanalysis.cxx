@@ -94,6 +94,10 @@ namespace V0info
   DECLARE_SOA_COLUMN(V0radius, v0radius, float);
   DECLARE_SOA_COLUMN(V0cosPA, v0cosPA, float);
   DECLARE_SOA_COLUMN(V0dcaDaughters, v0dcaDaughters, float);
+  DECLARE_SOA_COLUMN(PosPt, posPt, float);
+  DECLARE_SOA_COLUMN(NegPt, negPt, float);
+  DECLARE_SOA_COLUMN(PosEta, posEta, float);
+  DECLARE_SOA_COLUMN(NegEta, negEta, float);
   DECLARE_SOA_COLUMN(PosDcaToPV, posDcaToPV, float);
   DECLARE_SOA_COLUMN(NegDcaToPV, negDcaToPV, float);
   DECLARE_SOA_COLUMN(PosNsigmaTPC, posNsigmaTPC, float);
@@ -111,6 +115,10 @@ DECLARE_SOA_TABLE(V0TOFinfo, "AOD", "V0TOFINFO",
                   V0info::V0radius,
                   V0info::V0cosPA,
                   V0info::V0dcaDaughters,
+                  V0info::PosPt,
+                  V0info::NegPt,
+                  V0info::PosEta,
+                  V0info::NegEta,
                   V0info::PosDcaToPV,
                   V0info::NegDcaToPV,
                   V0info::PosNsigmaTPC,
@@ -2142,6 +2150,7 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("GeneralQA/h2dPtVsPtGen"), v0.pt(), pt);
         histos.fill(HIST("GeneralQA/h3dRapVsRapGen"), centrality, v0.yK0Short(), rapidityK0Short);
         histos.fill(HIST("GeneralQA/h3dPtVsPtGen"), centrality, v0.pt(), pt);
+      }
       // fill V0 info table if requested
       if (fillV0infoTable) {
         v0TOFinfo(v0.mK0Short(),
@@ -2152,6 +2161,10 @@ struct derivedlambdakzeroanalysis {
                   v0.v0radius(),
                   v0.v0cosPA(),
                   v0.dcaV0daughters(),
+                  v0.positivept(),
+                  v0.negativept(),
+                  v0.positiveeta(),
+                  v0.negativeeta(),
                   v0.dcapostopv(),
                   v0.dcanegtopv(),
                   posTrackExtra.tpcNSigmaPi(),
@@ -2254,6 +2267,7 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("GeneralQA/h2dPtVsPtGen"), v0.pt(), pt);
         histos.fill(HIST("GeneralQA/h3dRapVsRapGen"), centrality, v0.yLambda(), rapidityLambda);
         histos.fill(HIST("GeneralQA/h3dPtVsPtGen"), centrality, v0.pt(), pt);
+      }
       // fill V0 info table if requested
       if (fillV0infoTable) {
         v0TOFinfo(v0.mLambda(),
@@ -2264,6 +2278,10 @@ struct derivedlambdakzeroanalysis {
                   v0.v0radius(),
                   v0.v0cosPA(),
                   v0.dcaV0daughters(),
+                  v0.positivept(),
+                  v0.negativept(),
+                  v0.positiveeta(),
+                  v0.negativeeta(),
                   v0.dcapostopv(),
                   v0.dcanegtopv(),
                   posTrackExtra.tpcNSigmaPr(),
@@ -2362,6 +2380,7 @@ struct derivedlambdakzeroanalysis {
         histos.fill(HIST("GeneralQA/h2dPtVsPtGen"), v0.pt(), pt);
         histos.fill(HIST("GeneralQA/h3dRapVsRapGen"), centrality, v0.yLambda(), rapidityLambda);
         histos.fill(HIST("GeneralQA/h3dPtVsPtGen"), centrality, v0.pt(), pt);
+      }
       // fill V0 info table if requested
       if (fillV0infoTable) {
         v0TOFinfo(v0.mAntiLambda(),
@@ -2372,6 +2391,10 @@ struct derivedlambdakzeroanalysis {
                   v0.v0radius(),
                   v0.v0cosPA(),
                   v0.dcaV0daughters(),
+                  v0.positivept(),
+                  v0.negativept(),
+                  v0.positiveeta(),
+                  v0.negativeeta(),
                   v0.dcapostopv(),
                   v0.dcanegtopv(),
                   posTrackExtra.tpcNSigmaPi(),
